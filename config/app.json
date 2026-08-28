@@ -1,0 +1,12 @@
+{
+  "approvalMode": "manual",
+  "claudeModel": "claude-sonnet-5",
+  "selfCheckPassThreshold": 80,
+  "platform": "X",
+  "xCharLimit": 280,
+  "targetProductRatio": {
+    "review": 0.1,
+    "sale": 0.05
+  },
+  "recentPostsWindow": 10
+}

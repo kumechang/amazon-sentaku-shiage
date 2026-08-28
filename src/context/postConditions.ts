@@ -1,0 +1,66 @@
+import type Database from "better-sqlite3";
+import { countRecentByPostType } from "../db/repositories/postsRepo.js";
+import type { AppConfig } from "../config/types.js";
+
+// 洗濯・仕上げ剤ジャンルは季節性が強い(梅雨の部屋干し、冬の乾燥など)ため、
+// 月から大まかな季節ラベルを算出してプロンプトに渡す。
+function getSeasonLabel(month: number): string {
+  if (month >= 3 && month <= 5) return "春";
+  if (month >= 6 && month <= 8) return "夏(梅雨〜盛夏)";
+  if (month >= 9 && month <= 11) return "秋";
+  return "冬";
+}
+
+// {{post_conditions}} を組み立てる。日時・季節・文字数上限に加えて、
+// 直近の商品紹介比率が目標を超えている場合はそれを避けるヒントを追記する
+// (プロンプトファイル自体は変更せず、コード側の入力で挙動を調整する方針)。
+export function buildPostConditions(db: Database.Database, config: AppConfig): string {
+  const now = new Date();
+  const jstFormatter = new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const jstText = jstFormatter.format(now);
+  const jstMonth = Number(
+    new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric" }).format(now)
+  );
+
+  const lines = [
+    `プラットフォーム: ${config.platform}`,
+    `投稿予定日時(JST): ${jstText}`,
+    `季節: ${getSeasonLabel(jstMonth)}`,
+    `文字数上限の目安: 全角換算で${config.xCharLimit}文字相当に収まる長さにしてください。`,
+  ];
+
+  const ratioHint = buildProductRatioHint(db, config);
+  if (ratioHint) lines.push(ratioHint);
+
+  return lines.join("\n");
+}
+
+// 直近window件のうち review/sale タイプが目標比率の1.5倍を超えていたら警告文を返す。
+// 閾値の1.5倍は「多少の揺れは許容しつつ明らかな偏りだけ是正する」ための緩めの基準。
+function buildProductRatioHint(db: Database.Database, config: AppConfig): string | null {
+  const window = config.recentPostsWindow;
+  const counts = countRecentByPostType(db, window);
+  const total = Object.values(counts).reduce((sum, n) => sum + n, 0);
+  if (total === 0) return null;
+
+  const reviewRatio = (counts.review ?? 0) / total;
+  const saleRatio = (counts.sale ?? 0) / total;
+
+  const warnings: string[] = [];
+  if (reviewRatio > config.targetProductRatio.review * 1.5) {
+    warnings.push("直近で商品レビュー投稿の比率が目標を超えています。今回は商品紹介を避けるか、レビュー以外のタイプを優先してください。");
+  }
+  if (saleRatio > config.targetProductRatio.sale * 1.5) {
+    warnings.push("直近でセール投稿の比率が目標を超えています。今回はセール訴求を避けてください。");
+  }
+
+  return warnings.length > 0 ? warnings.join("\n") : null;
+}

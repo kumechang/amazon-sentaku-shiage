@@ -1,0 +1,59 @@
+# 承認用Issueへの「承認」/「却下」コメントを検知し、承認ならXへ投稿する。
+name: Handle Approval
+
+on:
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: db-write
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  handle-approval:
+    runs-on: ubuntu-latest
+    # pending-approvalラベルが無いIssueや、承認/却下と無関係なコメントには反応しない
+    # (Issueスレッド内の雑談コメントで無駄に実行されないためのガード)。
+    if: >
+      contains(github.event.issue.labels.*.name, 'pending-approval') &&
+      (contains(github.event.comment.body, '承認') || contains(github.event.comment.body, '却下'))
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Handle approval comment
+        env:
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
+        run: npm run handle-approval
+
+      - name: Commit DB changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/app.db
+          if git diff --cached --quiet; then
+            echo "no DB changes to commit"
+            exit 0
+          fi
+          git commit -m "chore(db): update after approval run [skip ci]"
+          for i in 1 2 3; do
+            git pull --rebase origin "${GITHUB_REF_NAME}" && git push && break
+            echo "push failed, retrying ($i)..."
+            sleep 5
+          done

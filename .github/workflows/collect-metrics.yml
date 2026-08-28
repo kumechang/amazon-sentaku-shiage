@@ -1,0 +1,52 @@
+# 投稿済みツイートのエンゲージメント(いいね・リポスト等)を毎日取得し、フィードバックループの材料にする。
+name: Collect Metrics
+
+on:
+  schedule:
+    # JST 08:00 (UTC 23:00 前日)
+    - cron: "0 23 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: db-write
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  collect-metrics:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Collect engagement metrics
+        env:
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
+        run: npm run collect-metrics
+
+      - name: Commit DB changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/app.db
+          if git diff --cached --quiet; then
+            echo "no DB changes to commit"
+            exit 0
+          fi
+          git commit -m "chore(db): update after metrics collection [skip ci]"
+          for i in 1 2 3; do
+            git pull --rebase origin "${GITHUB_REF_NAME}" && git push && break
+            echo "push failed, retrying ($i)..."
+            sleep 5
+          done

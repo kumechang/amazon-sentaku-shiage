@@ -1,0 +1,14 @@
+[
+  {
+    "asin": "B000000000",
+    "name": "TODO: 商品名を入力",
+    "description": "TODO: 事実として書ける商品特徴のみ記載(香り・容量・特徴など)",
+    "price": null,
+    "image_url": "",
+    "affiliate_url": "https://www.amazon.co.jp/dp/B000000000?tag=YOUR_ASSOCIATE_TAG",
+    "category": "仕上げ剤",
+    "tags": ["例:フローラル", "例:部屋干し対応"],
+    "active": false,
+    "priority": 0
+  }
+]
