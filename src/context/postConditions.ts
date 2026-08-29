@@ -4,11 +4,21 @@ import type { AppConfig } from "../config/types.js";
 
 // 洗濯・仕上げ剤ジャンルは季節性が強い(梅雨の部屋干し、冬の乾燥など)ため、
 // 月から大まかな季節ラベルを算出してプロンプトに渡す。
-function getSeasonLabel(month: number): string {
+export function getSeasonLabel(month: number): string {
   if (month >= 3 && month <= 5) return "春";
   if (month >= 6 && month <= 8) return "夏(梅雨〜盛夏)";
   if (month >= 9 && month <= 11) return "秋";
   return "冬";
+}
+
+// ja-JPロケールでmonth:'numeric'を format() すると"8月"のように単位付き文字列になり
+// Number()がNaNになる(getSeasonLabelのどの条件にも一致せず常に"冬"を返してしまう原因になっていた)。
+// formatToParts()でmonthパートの値だけを取り出すことで、実際の月を正しく取得する。
+export function getJstMonth(date: Date): number {
+  const monthPart = new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric" })
+    .formatToParts(date)
+    .find((part) => part.type === "month");
+  return Number(monthPart?.value);
 }
 
 // {{post_conditions}} を組み立てる。日時・季節・文字数上限に加えて、
@@ -26,9 +36,7 @@ export function buildPostConditions(db: Database.Database, config: AppConfig): s
     minute: "2-digit",
   });
   const jstText = jstFormatter.format(now);
-  const jstMonth = Number(
-    new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric" }).format(now)
-  );
+  const jstMonth = getJstMonth(now);
 
   const lines = [
     `プラットフォーム: ${config.platform}`,
