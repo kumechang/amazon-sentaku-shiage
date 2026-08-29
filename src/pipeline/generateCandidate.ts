@@ -60,10 +60,12 @@ export async function generateCandidate(db: Database.Database, config: AppConfig
   // (プロンプト自体が不合格時の修正を内包しているため)。
   let finalText = selfCheckResult.data.final_post;
 
-  // リトライを重ねても文字数超過が解消しない場合の最終手段として、
-  // 短縮専用の指示を1回だけ別途投げる(それでも収まらなければ諦めて失敗させる)。
-  if (weightedLength > config.xCharLimit) {
-    logger.warn("still over char limit after retries, applying a dedicated shorten pass", { length: weightedLength });
+  // リトライを重ねても文字数超過が解消しない場合の最終手段として、短縮専用の指示を
+  // 投げる。商品を絡めた投稿(product_usage: natural/main)は元の超過幅が大きく
+  // 1回では収まりきらないことがあるため、収まるまで複数回かけて縮めていく。
+  const MAX_SHORTEN_ATTEMPTS = 3;
+  for (let attempt = 1; weightedLength > config.xCharLimit && attempt <= MAX_SHORTEN_ATTEMPTS; attempt++) {
+    logger.warn("still over char limit, applying a dedicated shorten pass", { attempt, length: weightedLength });
     finalText = await shortenText(config.claudeModel, finalText, config.xCharLimit);
     weightedLength = getWeightedLength(finalText);
   }
