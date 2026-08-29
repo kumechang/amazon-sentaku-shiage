@@ -46,6 +46,7 @@ export function buildIssueBody(content: ApprovalIssueContent): string {
     "",
     "---",
     "この投稿を承認する場合はコメントで「承認」、却下する場合は「却下」と入力してください。",
+    "却下する場合、「却下 もう少し日常的な感じがいい」のように理由を続けて書くと、次回以降の投稿生成の参考にされます。",
   ].join("\n");
 }
 

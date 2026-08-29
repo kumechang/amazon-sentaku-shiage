@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3";
-import { countRecentByPostType } from "../db/repositories/postsRepo.js";
+import { countRecentByPostType, listRecentRejectionFeedback } from "../db/repositories/postsRepo.js";
 import type { AppConfig } from "../config/types.js";
 
 // 洗濯・仕上げ剤ジャンルは季節性が強い(梅雨の部屋干し、冬の乾燥など)ため、
@@ -40,7 +40,25 @@ export function buildPostConditions(db: Database.Database, config: AppConfig): s
   const ratioHint = buildProductRatioHint(db, config);
   if (ratioHint) lines.push(ratioHint);
 
+  const rejectionHint = buildRejectionHint(db, config);
+  if (rejectionHint) lines.push(rejectionHint);
+
   return lines.join("\n");
+}
+
+// 人がGitHub Issueで却下した際に理由(例:「却下 もう少し日常的な感じがいい」)を書いていれば、
+// それを次回生成時のヒントとして渡す。戦略・表現どちらにも関わる内容なので、
+// 両ステージが読む{{post_conditions}}経由で伝える。
+function buildRejectionHint(db: Database.Database, config: AppConfig): string | null {
+  const feedback = listRecentRejectionFeedback(db, config.recentPostsWindow);
+  if (feedback.length === 0) return null;
+
+  const lines = feedback.map((f) => {
+    const label = [f.postType, f.theme].filter((v): v is string => Boolean(v)).join(" / ");
+    return `- ${label ? `[${label}] ` : ""}${f.reason}`;
+  });
+
+  return ["直近、以下の理由で却下された投稿があります。同じ方向性を避けてください:", ...lines].join("\n");
 }
 
 // 直近window件のうち review/sale タイプが目標比率の1.5倍を超えていたら警告文を返す。

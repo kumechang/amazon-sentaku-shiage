@@ -147,6 +147,63 @@ export function markRejected(db: Database.Database, id: number, approvedBy: stri
   ).run(approvedBy, commentBody, id);
 }
 
+// 既に却下済みの投稿に対して、後から理由だけを追記/更新する。
+// (承認/却下の判定自体はやり直さない。ステータスやIssueのopen/closedには触れない)
+export function updateRejectionReason(db: Database.Database, id: number, approvedBy: string, commentBody: string): void {
+  db.prepare(
+    `UPDATE posts SET approved_by = ?, approval_comment_body = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+  ).run(approvedBy, commentBody, id);
+}
+
+// 「却下」というコメントから、キーワードを除いた自由記述部分を却下理由として取り出す。
+// 単に「却下」とだけ書かれていた場合(理由なし)はnullを返す。
+export function extractRejectionReason(commentBody: string): string | null {
+  const stripped = commentBody.replace(/却下/g, "").trim();
+  return stripped.length > 0 ? stripped : null;
+}
+
+export interface RejectionFeedback {
+  createdAt: string;
+  postType: string | null;
+  theme: string | null;
+  reason: string;
+}
+
+// フィードバックループ用: 理由が書かれている却下投稿だけを新しい順に返す。
+// 次回以降の生成時に「同じ方向性を避ける」ヒントとして{{post_conditions}}に渡す。
+export function listRecentRejectionFeedback(db: Database.Database, limit: number): RejectionFeedback[] {
+  const rows = db
+    .prepare(
+      `SELECT created_at, post_type, strategy_json, approval_comment_body FROM posts
+       WHERE status = 'rejected' AND approval_comment_body IS NOT NULL
+       ORDER BY created_at DESC
+       LIMIT ?`
+    )
+    .all(limit) as {
+    created_at: string;
+    post_type: string | null;
+    strategy_json: string;
+    approval_comment_body: string | null;
+  }[];
+
+  const feedback: RejectionFeedback[] = [];
+  for (const row of rows) {
+    if (!row.approval_comment_body) continue;
+    const reason = extractRejectionReason(row.approval_comment_body);
+    if (!reason) continue;
+
+    let theme: string | null = null;
+    try {
+      theme = (JSON.parse(row.strategy_json) as { theme?: string }).theme ?? null;
+    } catch {
+      // strategy_jsonが壊れていてもフィードバック自体は活かす
+    }
+
+    feedback.push({ createdAt: row.created_at, postType: row.post_type, theme, reason });
+  }
+  return feedback;
+}
+
 export function markPosted(db: Database.Database, id: number, tweetId: string, tweetUrl: string): void {
   db.prepare(
     `UPDATE posts SET status = 'posted', tweet_id = ?, tweet_url = ?, posted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
