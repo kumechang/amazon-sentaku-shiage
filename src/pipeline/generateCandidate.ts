@@ -42,21 +42,21 @@ export async function generateCandidate(db: Database.Database, config: AppConfig
       recentPosts,
     });
 
-  let { generatedText, selfCheckResult } = await generateAndCheck();
-
   // 文字数超過は投稿時にエラーになり、せっかく承認してもらっても投稿できず終わってしまう。
-  // Issueを作る前に検知し、1回だけ生成をやり直す(それでも超過なら失敗させ、
+  // Issueを作る前に検知し、最大2回まで生成をやり直す(それでも超過なら失敗させ、
   // 文字数超過のまま承認待ちの候補が残らないようにする)。
-  if (getWeightedLength(selfCheckResult.data.final_post) > config.xCharLimit) {
-    logger.warn("final post exceeds char limit, retrying generate+selfcheck once", {
-      length: getWeightedLength(selfCheckResult.data.final_post),
-    });
-    ({ generatedText, selfCheckResult } = await generateAndCheck());
+  const MAX_LENGTH_RETRIES = 2;
+  let { generatedText, selfCheckResult } = await generateAndCheck();
+  let weightedLength = getWeightedLength(selfCheckResult.data.final_post);
 
-    const retryLength = getWeightedLength(selfCheckResult.data.final_post);
-    if (retryLength > config.xCharLimit) {
-      throw new Error(`generated post exceeds char limit after retry: ${retryLength} > ${config.xCharLimit}`);
-    }
+  for (let attempt = 1; weightedLength > config.xCharLimit && attempt <= MAX_LENGTH_RETRIES; attempt++) {
+    logger.warn("final post exceeds char limit, retrying generate+selfcheck", { attempt, length: weightedLength });
+    ({ generatedText, selfCheckResult } = await generateAndCheck());
+    weightedLength = getWeightedLength(selfCheckResult.data.final_post);
+  }
+
+  if (weightedLength > config.xCharLimit) {
+    throw new Error(`generated post exceeds char limit after ${MAX_LENGTH_RETRIES} retries: ${weightedLength} > ${config.xCharLimit}`);
   }
 
   // pass true/falseに関わらず、常にselfCheckのfinal_postを投稿候補として採用する
