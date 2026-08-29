@@ -16,4 +16,9 @@ export interface AppConfig {
     startHour: number;
     endHour: number;
   };
+  // 1日あたりの目標投稿候補数。generate-postsは投稿可能時間帯の間毎時起動するが、
+  // 実際に生成するかはshouldGenerateNowがこの目標値をもとに確率的に判断する。
+  targetPostsPerDay: number;
+  // 直近の投稿候補作成からこの時間(h)未満なら、次の生成をスキップする(連投防止)。
+  minSpacingHours: number;
 }

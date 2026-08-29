@@ -15,6 +15,7 @@ import { env } from "../lib/env.js";
 import { getWeightedLength } from "../lib/tweetLength.js";
 import { shortenText } from "../claude/shortenText.js";
 import { isWithinPostingWindow } from "../lib/postingWindow.js";
+import { shouldGenerateNow } from "./shouldGenerateNow.js";
 import type { Strategy } from "../claude/stages/strategyStage.js";
 import type { SelfCheckResult } from "../claude/stages/selfCheckStage.js";
 
@@ -25,10 +26,20 @@ import type { SelfCheckResult } from "../claude/stages/selfCheckStage.js";
 // 実行されることがある。ペルソナ(30代女性の生活者)が深夜に投稿するのは不自然なため、
 // 投稿候補自体を作らずスキップする(nullを返す)。
 export async function generateCandidate(db: Database.Database, config: AppConfig): Promise<number | null> {
-  if (!isWithinPostingWindow(new Date(), config)) {
+  const now = new Date();
+
+  if (!isWithinPostingWindow(now, config)) {
     logger.warn("outside posting window, skipping this run", {
       postingWindow: config.postingWindow,
     });
+    return null;
+  }
+
+  // generate-postsは投稿可能時間帯の間毎時起動する(schedule遅延・スキップへの耐性のため)。
+  // 実際に生成するかどうかは、1日の目標数・直近投稿からの間隔・時間帯の重みをもとに
+  // ここで判断する(この判断自体はClaudeを呼ばない軽量なロジック)。
+  if (!shouldGenerateNow(db, config, now)) {
+    logger.info("skipping this run (throttled by shouldGenerateNow)");
     return null;
   }
 

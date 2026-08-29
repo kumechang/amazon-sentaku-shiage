@@ -61,3 +61,12 @@ CREATE TABLE IF NOT EXISTS post_metrics (
   engagement_rate REAL
 );
 CREATE INDEX IF NOT EXISTS idx_metrics_post ON post_metrics(post_id);
+
+-- 時間帯(JST 0-23時)ごとの投稿重み。週次のanalyze-posting-timesが更新する。
+-- データ不足で未分析の時間帯はデフォルト1.0(均等)のまま残る。
+CREATE TABLE IF NOT EXISTS posting_time_weights (
+  hour INTEGER PRIMARY KEY, -- 0-23 (JST)
+  weight REAL NOT NULL DEFAULT 1.0,
+  reason TEXT,              -- Claudeが重みをそう判断した理由(監査用)
+  updated_at TEXT
+);

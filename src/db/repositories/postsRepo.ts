@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { getJstDateString, parseDbTimestamp } from "../../lib/time.js";
 
 // postsテーブルへのアクセス層。1レコードが投稿候補1件のライフサイクル全体
 // (生成→承認待ち→承認/却下→投稿済み/失敗)を表す。
@@ -87,6 +88,27 @@ export function getPostById(db: Database.Database, id: number): PostRow | undefi
 
 export function getPostByIssueNumber(db: Database.Database, issueNumber: number): PostRow | undefined {
   return db.prepare(`SELECT * FROM posts WHERE github_issue_number = ?`).get(issueNumber) as PostRow | undefined;
+}
+
+// shouldGenerateNow用: 指定したJSTカレンダー日に生成された投稿候補数(承認/却下/投稿結果を問わない)。
+// SQLでは前後1日を粗く絞り込み、JST日付の厳密な判定はJS側で行う
+// (created_atはUTCで保存されているため)。
+export function countPostsCreatedOnJstDate(db: Database.Database, jstDateString: string): number {
+  const rows = db
+    .prepare(
+      `SELECT created_at FROM posts
+       WHERE created_at >= datetime(?, '-1 day') AND created_at <= datetime(?, '+1 day')`
+    )
+    .all(jstDateString, jstDateString) as { created_at: string }[];
+  return rows.filter((row) => getJstDateString(parseDbTimestamp(row.created_at)) === jstDateString).length;
+}
+
+// shouldGenerateNow用: 直近の投稿候補作成日時。minSpacingHoursの間隔判定に使う。
+export function getLastPostCreatedAt(db: Database.Database): string | null {
+  const row = db.prepare(`SELECT MAX(created_at) as last_created FROM posts`).get() as {
+    last_created: string | null;
+  };
+  return row.last_created;
 }
 
 // {{recent_posts}}用。却下・投稿失敗した候補は「実際に世に出た投稿」ではないため対象から除外する。

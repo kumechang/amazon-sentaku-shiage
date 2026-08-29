@@ -43,6 +43,26 @@ export function listPostedWithinDays(db: Database.Database, days: number): PostR
     .all(`-${days} days`) as PostRow[];
 }
 
+export interface PostEngagementSample {
+  postedAt: string;
+  engagementRate: number;
+}
+
+// analyzePostingTimes用: 投稿ごとの最新エンゲージメント率スナップショットを、
+// 投稿済み・計測済みの件数分だけ返す(時間帯別集計の元データ)。
+export function listLatestEngagementSamples(db: Database.Database): PostEngagementSample[] {
+  return db
+    .prepare(
+      `SELECT p.posted_at as postedAt, m.engagement_rate as engagementRate
+       FROM posts p
+       JOIN post_metrics m ON m.id = (
+         SELECT id FROM post_metrics WHERE post_id = p.id ORDER BY collected_at DESC LIMIT 1
+       )
+       WHERE p.status = 'posted' AND p.posted_at IS NOT NULL AND m.engagement_rate IS NOT NULL`
+    )
+    .all() as PostEngagementSample[];
+}
+
 export function getLatestMetricsForPost(
   db: Database.Database,
   postId: number
