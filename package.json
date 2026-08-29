@@ -8,6 +8,9 @@
     "handle-approval": "tsx src/cli/handleApproval.ts",
     "sync-products": "tsx src/cli/syncProducts.ts",
     "collect-metrics": "tsx src/cli/collectMetrics.ts",
+    "get-x-token:start": "tsx scripts/getXAccessTokenStart.ts",
+    "get-x-token:finish": "tsx scripts/getXAccessTokenFinish.ts",
+    "x-whoami": "tsx scripts/whoamiX.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
