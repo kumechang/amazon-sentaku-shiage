@@ -42,7 +42,12 @@ jobs:
           X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
         run: npm run handle-approval
 
+      # if: always() — 例えば承認後の投稿処理でX投稿自体が失敗しても、
+      # 承認された事実やpost_failedへの状態遷移はコミットして残す
+      # (これが無いと、DB上は承認前のままになり「既に処理済み」判定もできず、
+      # 承認コメントをもう一度書いても状況が変わらないまま失敗を繰り返すことになる)。
       - name: Commit DB changes
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

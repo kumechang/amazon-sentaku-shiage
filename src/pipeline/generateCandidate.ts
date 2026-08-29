@@ -12,6 +12,9 @@ import { createApprovalIssue } from "../github/createApprovalIssue.js";
 import { finalizeApprovedPost } from "./finalizeApprovedPost.js";
 import { logger } from "../lib/logger.js";
 import { env } from "../lib/env.js";
+import { getWeightedLength } from "../lib/tweetLength.js";
+import type { Strategy } from "../claude/stages/strategyStage.js";
+import type { SelfCheckResult } from "../claude/stages/selfCheckStage.js";
 
 // 投稿候補を1件作るパイプライン全体の統括役。
 // コンテキスト構築 → 戦略決定 → 本文生成 → セルフチェック → DB保存 → 承認Issue作成、
@@ -31,19 +34,30 @@ export async function generateCandidate(db: Database.Database, config: AppConfig
     postConditions,
   });
 
-  const generatedText = await runGenerateStage(config.claudeModel, {
-    accountInfo,
-    productInfo: productInfoText,
-    strategy: strategyResult.data,
-    recentPosts,
-    platform: config.platform,
-  });
+  const generateAndCheck = () =>
+    runGenerateAndSelfCheck(config, {
+      accountInfo,
+      productInfo: productInfoText,
+      strategy: strategyResult.data,
+      recentPosts,
+    });
 
-  const selfCheckResult = await runSelfCheckStage(config.claudeModel, {
-    generatedPost: generatedText,
-    strategy: strategyResult.data,
-    productInfo: productInfoText,
-  });
+  let { generatedText, selfCheckResult } = await generateAndCheck();
+
+  // 文字数超過は投稿時にエラーになり、せっかく承認してもらっても投稿できず終わってしまう。
+  // Issueを作る前に検知し、1回だけ生成をやり直す(それでも超過なら失敗させ、
+  // 文字数超過のまま承認待ちの候補が残らないようにする)。
+  if (getWeightedLength(selfCheckResult.data.final_post) > config.xCharLimit) {
+    logger.warn("final post exceeds char limit, retrying generate+selfcheck once", {
+      length: getWeightedLength(selfCheckResult.data.final_post),
+    });
+    ({ generatedText, selfCheckResult } = await generateAndCheck());
+
+    const retryLength = getWeightedLength(selfCheckResult.data.final_post);
+    if (retryLength > config.xCharLimit) {
+      throw new Error(`generated post exceeds char limit after retry: ${retryLength} > ${config.xCharLimit}`);
+    }
+  }
 
   // pass true/falseに関わらず、常にselfCheckのfinal_postを投稿候補として採用する
   // (プロンプト自体が不合格時の修正を内包しているため)。
@@ -82,4 +96,35 @@ export async function generateCandidate(db: Database.Database, config: AppConfig
   }
 
   return postId;
+}
+
+interface GenerateAndCheckContext {
+  accountInfo: string;
+  productInfo: string;
+  strategy: Strategy;
+  recentPosts: string;
+}
+
+// 投稿生成→セルフチェックの2ステージをまとめて実行する。
+// 文字数超過時のリトライで同じ組み合わせをもう一度呼ぶために切り出している。
+async function runGenerateAndSelfCheck(
+  config: AppConfig,
+  ctx: GenerateAndCheckContext
+): Promise<{ generatedText: string; selfCheckResult: { raw: string; data: SelfCheckResult } }> {
+  const generatedText = await runGenerateStage(config.claudeModel, {
+    accountInfo: ctx.accountInfo,
+    productInfo: ctx.productInfo,
+    strategy: ctx.strategy,
+    recentPosts: ctx.recentPosts,
+    platform: config.platform,
+    charLimit: config.xCharLimit,
+  });
+
+  const selfCheckResult = await runSelfCheckStage(config.claudeModel, {
+    generatedPost: generatedText,
+    strategy: ctx.strategy,
+    productInfo: ctx.productInfo,
+  });
+
+  return { generatedText, selfCheckResult };
 }
