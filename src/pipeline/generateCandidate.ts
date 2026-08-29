@@ -14,13 +14,24 @@ import { logger } from "../lib/logger.js";
 import { env } from "../lib/env.js";
 import { getWeightedLength } from "../lib/tweetLength.js";
 import { shortenText } from "../claude/shortenText.js";
+import { isWithinPostingWindow } from "../lib/postingWindow.js";
 import type { Strategy } from "../claude/stages/strategyStage.js";
 import type { SelfCheckResult } from "../claude/stages/selfCheckStage.js";
 
 // 投稿候補を1件作るパイプライン全体の統括役。
 // コンテキスト構築 → 戦略決定 → 本文生成 → セルフチェック → DB保存 → 承認Issue作成、
 // の順に実行し、最後にautoモードなら即時投稿まで行う。
-export async function generateCandidate(db: Database.Database, config: AppConfig): Promise<number> {
+// GitHub Actionsのscheduleは数時間単位で遅延することがあり、想定外に深夜へズレ込んで
+// 実行されることがある。ペルソナ(30代女性の生活者)が深夜に投稿するのは不自然なため、
+// 投稿候補自体を作らずスキップする(nullを返す)。
+export async function generateCandidate(db: Database.Database, config: AppConfig): Promise<number | null> {
+  if (!isWithinPostingWindow(new Date(), config)) {
+    logger.warn("outside posting window, skipping this run", {
+      postingWindow: config.postingWindow,
+    });
+    return null;
+  }
+
   const accountInfo = loadAccountInfo();
   const { productId, productInfoText } = selectProduct(db);
   const recentPosts = summarizeRecentPosts(db, config.recentPostsWindow);

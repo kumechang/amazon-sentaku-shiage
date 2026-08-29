@@ -43,6 +43,8 @@ npm run typecheck
 
 いずれも`data/app.db`(SQLite)を実行後にbotコミットしてリポジトリに戻す。DB書き込みが競合しないよう`concurrency: db-write`グループを共有。
 
+GitHub Actionsの`schedule`は数時間単位で遅延・スキップされることがある(GitHub側の既知の制限)。`generate-posts.yml`が深夜など不自然な時間帯(`config/app.json`の`postingWindow`、既定はJST 7〜23時)にズレ込んで実行された場合は、投稿候補を作らずスキップする。
+
 ### 必要なSecrets
 
 - `ANTHROPIC_API_KEY`
