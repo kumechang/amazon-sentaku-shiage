@@ -20,7 +20,9 @@ export async function callClaude(model: string, prompt: string): Promise<string>
 
   const textBlock = response.content.find((block) => block.type === "text");
   if (!textBlock || textBlock.type !== "text") {
-    throw new Error("Claude response contained no text block");
+    throw new Error(
+      `Claude response contained no text block (stop_reason=${response.stop_reason}, content_types=${response.content.map((b) => b.type).join(",")})`
+    );
   }
   return textBlock.text;
 }
