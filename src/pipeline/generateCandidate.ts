@@ -124,6 +124,7 @@ async function runGenerateAndSelfCheck(
     generatedPost: generatedText,
     strategy: ctx.strategy,
     productInfo: ctx.productInfo,
+    charLimit: config.xCharLimit,
   });
 
   return { generatedText, selfCheckResult };
