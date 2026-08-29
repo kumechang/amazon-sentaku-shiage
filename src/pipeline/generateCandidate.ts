@@ -13,6 +13,7 @@ import { finalizeApprovedPost } from "./finalizeApprovedPost.js";
 import { logger } from "../lib/logger.js";
 import { env } from "../lib/env.js";
 import { getWeightedLength } from "../lib/tweetLength.js";
+import { shortenText } from "../claude/shortenText.js";
 import type { Strategy } from "../claude/stages/strategyStage.js";
 import type { SelfCheckResult } from "../claude/stages/selfCheckStage.js";
 
@@ -55,12 +56,22 @@ export async function generateCandidate(db: Database.Database, config: AppConfig
     weightedLength = getWeightedLength(selfCheckResult.data.final_post);
   }
 
+  // pass true/falseに関わらず、基本的にはselfCheckのfinal_postを投稿候補として採用する
+  // (プロンプト自体が不合格時の修正を内包しているため)。
+  let finalText = selfCheckResult.data.final_post;
+
+  // リトライを重ねても文字数超過が解消しない場合の最終手段として、
+  // 短縮専用の指示を1回だけ別途投げる(それでも収まらなければ諦めて失敗させる)。
   if (weightedLength > config.xCharLimit) {
-    throw new Error(`generated post exceeds char limit after ${MAX_LENGTH_RETRIES} retries: ${weightedLength} > ${config.xCharLimit}`);
+    logger.warn("still over char limit after retries, applying a dedicated shorten pass", { length: weightedLength });
+    finalText = await shortenText(config.claudeModel, finalText, config.xCharLimit);
+    weightedLength = getWeightedLength(finalText);
   }
 
-  // pass true/falseに関わらず、常にselfCheckのfinal_postを投稿候補として採用する
-  // (プロンプト自体が不合格時の修正を内包しているため)。
+  if (weightedLength > config.xCharLimit) {
+    throw new Error(`generated post exceeds char limit after retries and shortening: ${weightedLength} > ${config.xCharLimit}`);
+  }
+
   const postId = createPost(db, {
     platform: config.platform,
     product_id: productId,
@@ -69,14 +80,14 @@ export async function generateCandidate(db: Database.Database, config: AppConfig
     strategy_json: JSON.stringify(strategyResult.data),
     generated_text: generatedText,
     selfcheck_json: JSON.stringify(selfCheckResult.data),
-    final_text: selfCheckResult.data.final_post,
+    final_text: finalText,
     self_check_score: selfCheckResult.data.score,
     self_check_pass: selfCheckResult.data.pass,
     run_id: env.githubRunId || null,
   });
 
   const issue = await createApprovalIssue({
-    finalText: selfCheckResult.data.final_post,
+    finalText,
     strategy: strategyResult.data,
     selfCheck: selfCheckResult.data,
   });
