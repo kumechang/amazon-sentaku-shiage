@@ -16,8 +16,8 @@
   "targetPostsPerDay": 4,
   "minSpacingHours": 2,
   "replySettings": {
-    "targetRepliesPerDay": 3,
-    "minSpacingHours": 3,
+    "targetRepliesPerDay": 10,
+    "minSpacingHours": 1,
     "minFollowers": 50,
     "maxFollowers": 50000,
     "keywords": ["部屋干し", "柔軟剤", "生乾き臭", "洗濯あるある"]
