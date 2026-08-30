@@ -13,6 +13,13 @@ export function buildKeywordQuery(keywords: string[]): string {
   return `(${orClause}) lang:ja -is:retweet -is:reply`;
 }
 
+// 検索はキーワードをOR結合した1本のクエリで投げるため、X APIのレスポンスには
+// どのキーワードがヒットしたかの情報が無い。ヒット後の本文に対する部分一致で近似する
+// (リスト順で最初に一致したものを採用。厳密ではないがキーワード自己最適化には十分)。
+export function matchKeyword(text: string, keywords: string[]): string | null {
+  return keywords.find((keyword) => text.includes(keyword)) ?? null;
+}
+
 export function buildWatchedAccountQuery(usernames: string[]): string {
   const orClause = usernames.map((username) => `from:${username}`).join(" OR ");
   return `(${orClause}) -is:retweet -is:reply`;

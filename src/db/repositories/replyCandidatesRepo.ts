@@ -19,6 +19,7 @@ export type ReplyCandidateSource = "keyword" | "watched_account" | "mention";
 
 export interface CreateReplyCandidateInput {
   source: ReplyCandidateSource;
+  matched_keyword: string | null;
   target_tweet_id: string;
   target_author_username: string;
   target_text: string;
@@ -32,6 +33,7 @@ export interface CreateReplyCandidateInput {
 export interface ReplyCandidateRow {
   id: number;
   source: ReplyCandidateSource;
+  matched_keyword: string | null;
   target_tweet_id: string;
   target_author_username: string;
   target_text: string;
@@ -60,11 +62,12 @@ export function createReplyCandidate(db: Database.Database, input: CreateReplyCa
   const status: ReplyCandidateStatus = input.should_reply ? "pending_approval" : "skipped";
   const result = db
     .prepare(
-      `INSERT INTO reply_candidates (source, target_tweet_id, target_author_username, target_text, target_follower_count, reply_text, should_reply, skip_reason, status, run_id, updated_at)
-       VALUES (@source, @target_tweet_id, @target_author_username, @target_text, @target_follower_count, @reply_text, @should_reply, @skip_reason, @status, @run_id, CURRENT_TIMESTAMP)`
+      `INSERT INTO reply_candidates (source, matched_keyword, target_tweet_id, target_author_username, target_text, target_follower_count, reply_text, should_reply, skip_reason, status, run_id, updated_at)
+       VALUES (@source, @matched_keyword, @target_tweet_id, @target_author_username, @target_text, @target_follower_count, @reply_text, @should_reply, @skip_reason, @status, @run_id, CURRENT_TIMESTAMP)`
     )
     .run({
       source: input.source,
+      matched_keyword: input.matched_keyword,
       target_tweet_id: input.target_tweet_id,
       target_author_username: input.target_author_username,
       target_text: input.target_text,
@@ -184,6 +187,27 @@ export function listRecentReplyRejectionFeedback(db: Database.Database, limit: n
     feedback.push({ createdAt: row.created_at, targetAuthorUsername: row.target_author_username, reason });
   }
   return feedback;
+}
+
+export interface KeywordOutcomeStats {
+  keyword: string;
+  goodCount: number;
+  badCount: number;
+}
+
+// analyze-reply-keywords用: キーワードごとの実績集計。
+// 承認/投稿済み=良い実績、却下 or Claude自身がshould_reply=falseと判断(=検索ノイズ)=悪い実績、として扱う。
+export function listKeywordOutcomeStats(db: Database.Database): KeywordOutcomeStats[] {
+  return db
+    .prepare(
+      `SELECT matched_keyword as keyword,
+         SUM(CASE WHEN status IN ('approved', 'posted', 'posted_dryrun') THEN 1 ELSE 0 END) as goodCount,
+         SUM(CASE WHEN status = 'rejected' OR should_reply = 0 THEN 1 ELSE 0 END) as badCount
+       FROM reply_candidates
+       WHERE source = 'keyword' AND matched_keyword IS NOT NULL
+       GROUP BY matched_keyword`
+    )
+    .all() as KeywordOutcomeStats[];
 }
 
 export function markPosted(db: Database.Database, id: number, replyTweetId: string, replyTweetUrl: string): void {

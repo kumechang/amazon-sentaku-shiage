@@ -12,6 +12,7 @@
     "sync-products": "tsx src/cli/syncProducts.ts",
     "collect-metrics": "tsx src/cli/collectMetrics.ts",
     "analyze-posting-times": "tsx src/cli/analyzePostingTimes.ts",
+    "analyze-reply-keywords": "tsx src/cli/analyzeReplyKeywords.ts",
     "get-x-token:start": "tsx scripts/getXAccessTokenStart.ts",
     "get-x-token:finish": "tsx scripts/getXAccessTokenFinish.ts",
     "x-whoami": "tsx scripts/whoamiX.ts",

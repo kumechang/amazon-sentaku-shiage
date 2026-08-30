@@ -6,8 +6,9 @@ import { loadAccountInfo } from "../context/accountInfo.js";
 import { summarizeRecentPosts } from "../context/recentPostsSummarizer.js";
 import { runReplyStage } from "../claude/stages/replyStage.js";
 import { getXClient } from "../x/xClient.js";
-import { searchByKeywords, searchByWatchedAccounts, type SearchCandidate } from "../x/searchCandidates.js";
+import { searchByKeywords, searchByWatchedAccounts, matchKeyword, type SearchCandidate } from "../x/searchCandidates.js";
 import { createReplyCandidate, getByTargetTweetId, setGithubIssue } from "../db/repositories/replyCandidatesRepo.js";
+import { getWeight, getAverageWeight } from "../db/repositories/replyKeywordWeightsRepo.js";
 import { createReplyApprovalIssue } from "../github/createReplyApprovalIssue.js";
 import { buildReplyRejectionHint } from "../context/replyRejectionHint.js";
 import { shouldGenerateReplyNow } from "./shouldGenerateReplyNow.js";
@@ -44,6 +45,21 @@ function pickCandidate(
   return null;
 }
 
+// キーワード検索結果を、そのキーワードの学習済み重み(降順)で並べ替える。
+// 未分析のキーワードは全体平均で扱う(posting_time_weightsと同じ考え方)。
+function sortKeywordResultsByWeight(
+  db: Database.Database,
+  candidates: SearchCandidate[],
+  keywords: string[]
+): SearchCandidate[] {
+  const average = getAverageWeight(db);
+  const weightOf = (candidate: SearchCandidate): number => {
+    const keyword = matchKeyword(candidate.text, keywords);
+    return keyword ? getWeight(db, keyword) : average;
+  };
+  return [...candidates].sort((a, b) => weightOf(b) - weightOf(a));
+}
+
 // 他アカウントの投稿への返信候補を1件作るパイプラインの統括役。
 // shouldGenerateReplyNow(検索は有料のため、生成すべきタイミングでのみ実行) →
 // 検索(キーワード+ウォッチ対象) → 候補選定 → Claudeが返信すべきか判断 → DB保存 →
@@ -70,7 +86,9 @@ export async function generateReplyCandidate(db: Database.Database, config: AppC
   ]);
 
   // ウォッチ対象アカウントの投稿を優先する(キーワードよりジャンル適合度が高いと見なす)。
-  const candidate = pickCandidate(db, [...watchedResults, ...keywordResults], config);
+  // キーワード由来の候補群は、学習済みの重み(承認されやすいキーワードほど高い)で並べ替える。
+  const sortedKeywordResults = sortKeywordResultsByWeight(db, keywordResults, config.replySettings.keywords);
+  const candidate = pickCandidate(db, [...watchedResults, ...sortedKeywordResults], config);
   if (!candidate) {
     logger.info("no reply candidates found this run");
     return null;
@@ -83,6 +101,7 @@ export async function generateReplyCandidate(db: Database.Database, config: AppC
   const source: "keyword" | "watched_account" = watchedUsernames.includes(candidate.authorUsername)
     ? "watched_account"
     : "keyword";
+  const matchedKeyword = source === "keyword" ? matchKeyword(candidate.text, config.replySettings.keywords) : null;
 
   const replyResult = await runReplyStage(config.claudeModel, {
     accountInfo,
@@ -94,6 +113,7 @@ export async function generateReplyCandidate(db: Database.Database, config: AppC
 
   const replyId = createReplyCandidate(db, {
     source,
+    matched_keyword: matchedKeyword,
     target_tweet_id: candidate.tweetId,
     target_author_username: candidate.authorUsername,
     target_text: candidate.text,

@@ -74,6 +74,7 @@ export async function generateMentionReplies(db: Database.Database, config: AppC
 
     const replyId = createReplyCandidate(db, {
       source: "mention",
+      matched_keyword: null,
       target_tweet_id: mention.tweetId,
       target_author_username: mention.authorUsername,
       target_text: mention.text,

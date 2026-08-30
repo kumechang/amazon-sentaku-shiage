@@ -75,7 +75,8 @@ CREATE TABLE IF NOT EXISTS posting_time_weights (
 -- (相手の投稿情報を持つ)ため独立したテーブルにしている。
 CREATE TABLE IF NOT EXISTS reply_candidates (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  source TEXT NOT NULL,              -- 'keyword' | 'watched_account'
+  source TEXT NOT NULL,              -- 'keyword' | 'watched_account' | 'mention'
+  matched_keyword TEXT,              -- source='keyword'の場合のみ、ヒットしたキーワード(事後の部分一致判定)
   target_tweet_id TEXT NOT NULL UNIQUE, -- UNIQUE制約で同じ投稿への重複返信を防ぐ
   target_author_username TEXT NOT NULL,
   target_text TEXT NOT NULL,
@@ -99,3 +100,12 @@ CREATE TABLE IF NOT EXISTS reply_candidates (
   updated_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_reply_candidates_status ON reply_candidates(status);
+
+-- キーワードごとの返信候補優先度。週次のanalyze-reply-keywordsが更新する。
+-- posting_time_weightsのキーワード版(hourの代わりにkeywordがキー)。
+CREATE TABLE IF NOT EXISTS reply_keyword_weights (
+  keyword TEXT PRIMARY KEY,
+  weight REAL NOT NULL DEFAULT 1.0,
+  reason TEXT,
+  updated_at TEXT
+);
