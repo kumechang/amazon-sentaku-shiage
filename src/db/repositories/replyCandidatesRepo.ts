@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import { getJstDateString, parseDbTimestamp } from "../../lib/time.js";
+import { extractRejectionReason } from "./postsRepo.js";
 
 // reply_candidatesテーブルへのアクセス層。postsRepo.tsと対になる構成だが、
 // 「自分の投稿」ではなく「他アカウントの投稿への返信候補」を扱うため独立させている。
@@ -154,6 +155,35 @@ export function markRejected(db: Database.Database, id: number, approvedBy: stri
   db.prepare(
     `UPDATE reply_candidates SET status = 'rejected', approved_by = ?, approval_comment_body = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
   ).run(approvedBy, commentBody, id);
+}
+
+export interface ReplyRejectionFeedback {
+  createdAt: string;
+  targetAuthorUsername: string;
+  reason: string;
+}
+
+// フィードバックループ用: 理由が書かれている却下返信案だけを新しい順に返す。
+// postsRepo.tsのlistRecentRejectionFeedbackの返信版。extractRejectionReasonは
+// 「却下」キーワードを含む文字列全般に使える汎用関数のためpostsRepo.tsから再利用する。
+export function listRecentReplyRejectionFeedback(db: Database.Database, limit: number): ReplyRejectionFeedback[] {
+  const rows = db
+    .prepare(
+      `SELECT created_at, target_author_username, approval_comment_body FROM reply_candidates
+       WHERE status = 'rejected' AND approval_comment_body IS NOT NULL
+       ORDER BY created_at DESC
+       LIMIT ?`
+    )
+    .all(limit) as { created_at: string; target_author_username: string; approval_comment_body: string | null }[];
+
+  const feedback: ReplyRejectionFeedback[] = [];
+  for (const row of rows) {
+    if (!row.approval_comment_body) continue;
+    const reason = extractRejectionReason(row.approval_comment_body);
+    if (!reason) continue;
+    feedback.push({ createdAt: row.created_at, targetAuthorUsername: row.target_author_username, reason });
+  }
+  return feedback;
 }
 
 export function markPosted(db: Database.Database, id: number, replyTweetId: string, replyTweetUrl: string): void {

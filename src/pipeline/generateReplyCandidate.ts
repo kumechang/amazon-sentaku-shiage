@@ -9,6 +9,7 @@ import { getXClient } from "../x/xClient.js";
 import { searchByKeywords, searchByWatchedAccounts, type SearchCandidate } from "../x/searchCandidates.js";
 import { createReplyCandidate, getByTargetTweetId, setGithubIssue } from "../db/repositories/replyCandidatesRepo.js";
 import { createReplyApprovalIssue } from "../github/createReplyApprovalIssue.js";
+import { buildReplyRejectionHint } from "../context/replyRejectionHint.js";
 import { shouldGenerateReplyNow } from "./shouldGenerateReplyNow.js";
 import { hasXCredentials, env } from "../lib/env.js";
 import { logger } from "../lib/logger.js";
@@ -77,6 +78,7 @@ export async function generateReplyCandidate(db: Database.Database, config: AppC
 
   const accountInfo = loadAccountInfo();
   const recentPosts = summarizeRecentPosts(db, config.recentPostsWindow);
+  const rejectionFeedback = buildReplyRejectionHint(db, config.recentPostsWindow);
 
   const source: "keyword" | "watched_account" = watchedUsernames.includes(candidate.authorUsername)
     ? "watched_account"
@@ -87,6 +89,7 @@ export async function generateReplyCandidate(db: Database.Database, config: AppC
     targetAuthor: candidate.authorUsername,
     targetText: candidate.text,
     recentPosts,
+    rejectionFeedback,
   });
 
   const replyId = createReplyCandidate(db, {

@@ -16,6 +16,7 @@ export interface ReplyStageInput {
   targetAuthor: string;
   targetText: string;
   recentPosts: string;
+  rejectionFeedback: string;
 }
 
 // 相手の投稿1件に対して、返信すべきかどうか・返信するなら何を書くかをClaudeに判断させる。
@@ -26,6 +27,7 @@ export async function runReplyStage(model: string, input: ReplyStageInput): Prom
     target_author: input.targetAuthor,
     target_text: input.targetText,
     recent_posts: input.recentPosts,
+    rejection_feedback: input.rejectionFeedback,
   });
   return callClaudeJson(model, prompt, replySchema);
 }

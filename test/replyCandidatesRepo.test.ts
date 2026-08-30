@@ -9,6 +9,8 @@ import {
   getLastReplyCreatedAt,
   countMentionRepliesCreatedOnJstDate,
   getLastMentionTargetTweetId,
+  markRejected,
+  listRecentReplyRejectionFeedback,
 } from "../src/db/repositories/replyCandidatesRepo.js";
 import { getJstDateString } from "../src/lib/time.js";
 
@@ -144,5 +146,38 @@ describe("replyCandidatesRepo", () => {
       run_id: null,
     });
     expect(getLastMentionTargetTweetId(db)).toBe("mention-1");
+  });
+
+  it("listRecentReplyRejectionFeedback skips rejections without a reason and extracts reasons from ones that have them", () => {
+    const bareId = createReplyCandidate(db, {
+      source: "keyword",
+      target_tweet_id: "1",
+      target_author_username: "a",
+      target_text: "text",
+      target_follower_count: 100,
+      reply_text: "reply",
+      should_reply: true,
+      skip_reason: null,
+      run_id: null,
+    });
+    markRejected(db, bareId, "kumechang", "却下");
+
+    const reasonedId = createReplyCandidate(db, {
+      source: "mention",
+      target_tweet_id: "2",
+      target_author_username: "b",
+      target_text: "text",
+      target_follower_count: null,
+      reply_text: "reply",
+      should_reply: true,
+      skip_reason: null,
+      run_id: null,
+    });
+    markRejected(db, reasonedId, "kumechang", "却下 もっとフランクな感じがいい");
+
+    const feedback = listRecentReplyRejectionFeedback(db, 10);
+    expect(feedback).toHaveLength(1);
+    expect(feedback[0]?.reason).toBe("もっとフランクな感じがいい");
+    expect(feedback[0]?.targetAuthorUsername).toBe("b");
   });
 });

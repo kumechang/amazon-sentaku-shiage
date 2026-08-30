@@ -14,6 +14,7 @@ import {
   getById,
 } from "../db/repositories/replyCandidatesRepo.js";
 import { createReplyApprovalIssue } from "../github/createReplyApprovalIssue.js";
+import { buildReplyRejectionHint } from "../context/replyRejectionHint.js";
 import { finalizeApprovedReply } from "./finalizeApprovedReply.js";
 import { isWithinPostingWindow } from "../lib/postingWindow.js";
 import { getJstDateString } from "../lib/time.js";
@@ -49,6 +50,7 @@ export async function generateMentionReplies(db: Database.Database, config: AppC
   }
 
   const accountInfo = loadAccountInfo();
+  const rejectionFeedback = buildReplyRejectionHint(db, config.recentPostsWindow);
   const { maxRepliesPerRun, maxRepliesPerDay } = config.mentionReplySettings;
   const todayJst = getJstDateString(now);
 
@@ -67,6 +69,7 @@ export async function generateMentionReplies(db: Database.Database, config: AppC
       targetAuthor: mention.authorUsername,
       targetText: mention.text,
       recentPosts,
+      rejectionFeedback,
     });
 
     const replyId = createReplyCandidate(db, {
