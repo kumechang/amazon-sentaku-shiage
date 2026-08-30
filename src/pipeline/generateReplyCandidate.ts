@@ -7,14 +7,8 @@ import { summarizeRecentPosts } from "../context/recentPostsSummarizer.js";
 import { runReplyStage } from "../claude/stages/replyStage.js";
 import { getXClient } from "../x/xClient.js";
 import { searchByKeywords, searchByWatchedAccounts, type SearchCandidate } from "../x/searchCandidates.js";
-import {
-  createReplyCandidate,
-  getByTargetTweetId,
-  setGithubIssue,
-  getById,
-} from "../db/repositories/replyCandidatesRepo.js";
+import { createReplyCandidate, getByTargetTweetId, setGithubIssue } from "../db/repositories/replyCandidatesRepo.js";
 import { createReplyApprovalIssue } from "../github/createReplyApprovalIssue.js";
-import { finalizeApprovedReply } from "./finalizeApprovedReply.js";
 import { shouldGenerateReplyNow } from "./shouldGenerateReplyNow.js";
 import { hasXCredentials, env } from "../lib/env.js";
 import { logger } from "../lib/logger.js";
@@ -114,6 +108,7 @@ export async function generateReplyCandidate(db: Database.Database, config: AppC
 
   const issue = await createReplyApprovalIssue({
     targetAuthorUsername: candidate.authorUsername,
+    targetTweetId: candidate.tweetId,
     targetText: candidate.text,
     replyText: replyResult.data.reply_text,
     reason: replyResult.data.reason,
@@ -124,14 +119,7 @@ export async function generateReplyCandidate(db: Database.Database, config: AppC
 
   logger.info("reply candidate created", { replyId, issueNumber: issue.number });
 
-  // autoモードでも、Claude自身が「返信すべきでない」と判断した場合は当然投稿しない
-  // (should_reply=falseは上のreturnで既に処理済みなので、ここに来る時点でtrue確定)。
-  if (config.approvalMode === "auto") {
-    const reply = getById(db, replyId);
-    if (reply) {
-      await finalizeApprovedReply(db, config, reply);
-    }
-  }
-
+  // 2026年2月のX API仕様変更で、メンション/引用されていない投稿への自動返信はできなくなった
+  // ため、approvalModeが"auto"でもここでは投稿しない(手動投稿の下書き支援に留める)。
   return replyId;
 }

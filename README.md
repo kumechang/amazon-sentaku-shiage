@@ -32,9 +32,17 @@ npm run generate        # 投稿候補を1件生成し、GitHub Issueを作成
 npm run handle-approval # GitHub Issueコメント(承認/却下)を処理(Actionsのissue_commentイベント経由で実行)
 npm run collect-metrics # 投稿済みツイートのエンゲージメントを取得
 npm run analyze-posting-times # エンゲージメント実績から時間帯ごとの投稿重みを算出
+npm run generate-reply  # 他アカウントの投稿への返信候補を1件探し、Issueで下書き提示
+npm run handle-reply-approval # 返信Issueコメント(承認/却下)を処理
 npm test                # ユニットテスト
 npm run typecheck
 ```
+
+## 他アカウントの投稿への返信(下書き支援)
+
+フォロワー0の新規アカウントは単独投稿だけでは届く相手がいないため、キーワード検索・ウォッチ対象アカウント(`data/watched_accounts.json`)から返信候補を探し、Claudeが返信すべきか・何を返信するかを判断してGitHub Issueに提示する。
+
+**2026年2月のX API仕様変更により、メンション/引用されていない投稿へのプログラム経由の返信は全ティア(Free/Basic/Pro/Pay-Per-Use)でブロックされている**ため、Issueで「承認」してもX APIでの自動投稿は行わない。承認されたIssueに書かれたリンクから対象投稿を開き、返信案を手動でコピー&投稿する運用。`generate-replies.yml`のschedule起動は一時停止中(`workflow_dispatch`での手動実行は可能)。フォロワーが増え、こちらが先にメンション/引用される機会が増えてきたら、その条件下での自動返信を検討する。
 
 ## GitHub Actions
 
