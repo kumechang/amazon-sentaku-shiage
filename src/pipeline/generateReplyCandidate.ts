@@ -1,0 +1,137 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import type Database from "better-sqlite3";
+import type { AppConfig } from "../config/types.js";
+import { loadAccountInfo } from "../context/accountInfo.js";
+import { summarizeRecentPosts } from "../context/recentPostsSummarizer.js";
+import { runReplyStage } from "../claude/stages/replyStage.js";
+import { getXClient } from "../x/xClient.js";
+import { searchByKeywords, searchByWatchedAccounts, type SearchCandidate } from "../x/searchCandidates.js";
+import {
+  createReplyCandidate,
+  getByTargetTweetId,
+  setGithubIssue,
+  getById,
+} from "../db/repositories/replyCandidatesRepo.js";
+import { createReplyApprovalIssue } from "../github/createReplyApprovalIssue.js";
+import { finalizeApprovedReply } from "./finalizeApprovedReply.js";
+import { shouldGenerateReplyNow } from "./shouldGenerateReplyNow.js";
+import { hasXCredentials, env } from "../lib/env.js";
+import { logger } from "../lib/logger.js";
+
+interface WatchedAccountEntry {
+  username: string;
+  note?: string;
+  active: boolean;
+}
+
+function loadWatchedUsernames(): string[] {
+  const filePath = path.resolve(process.cwd(), "data/watched_accounts.json");
+  const entries = JSON.parse(readFileSync(filePath, "utf-8")) as WatchedAccountEntry[];
+  return entries.filter((entry) => entry.active).map((entry) => entry.username);
+}
+
+// フォロワー数条件・重複除外を満たす、未処理の候補を1件選ぶ。
+// キーワード検索とウォッチ対象検索の結果を結合し、先勝ちで最初に条件を満たしたものを採用する。
+function pickCandidate(
+  db: Database.Database,
+  candidates: SearchCandidate[],
+  config: AppConfig
+): SearchCandidate | null {
+  const { minFollowers, maxFollowers } = config.replySettings;
+  for (const candidate of candidates) {
+    if (!candidate.authorUsername) continue;
+    if (getByTargetTweetId(db, candidate.tweetId)) continue; // 重複除外
+    if (candidate.followerCount === null) continue;
+    if (candidate.followerCount < minFollowers || candidate.followerCount > maxFollowers) continue;
+    return candidate;
+  }
+  return null;
+}
+
+// 他アカウントの投稿への返信候補を1件作るパイプラインの統括役。
+// shouldGenerateReplyNow(検索は有料のため、生成すべきタイミングでのみ実行) →
+// 検索(キーワード+ウォッチ対象) → 候補選定 → Claudeが返信すべきか判断 → DB保存 →
+// (返信すべき場合のみ)承認Issue作成、の順で進む。
+export async function generateReplyCandidate(db: Database.Database, config: AppConfig): Promise<number | null> {
+  const now = new Date();
+
+  if (!shouldGenerateReplyNow(db, config, now)) {
+    logger.info("skipping this reply run (throttled by shouldGenerateReplyNow)");
+    return null;
+  }
+
+  if (!hasXCredentials()) {
+    logger.warn("X API credentials not configured, skipping reply search (dry-run environment)");
+    return null;
+  }
+
+  const client = getXClient();
+  const watchedUsernames = loadWatchedUsernames();
+
+  const [keywordResults, watchedResults] = await Promise.all([
+    searchByKeywords(client, config.replySettings.keywords),
+    searchByWatchedAccounts(client, watchedUsernames),
+  ]);
+
+  // ウォッチ対象アカウントの投稿を優先する(キーワードよりジャンル適合度が高いと見なす)。
+  const candidate = pickCandidate(db, [...watchedResults, ...keywordResults], config);
+  if (!candidate) {
+    logger.info("no reply candidates found this run");
+    return null;
+  }
+
+  const accountInfo = loadAccountInfo();
+  const recentPosts = summarizeRecentPosts(db, config.recentPostsWindow);
+
+  const source: "keyword" | "watched_account" = watchedUsernames.includes(candidate.authorUsername)
+    ? "watched_account"
+    : "keyword";
+
+  const replyResult = await runReplyStage(config.claudeModel, {
+    accountInfo,
+    targetAuthor: candidate.authorUsername,
+    targetText: candidate.text,
+    recentPosts,
+  });
+
+  const replyId = createReplyCandidate(db, {
+    source,
+    target_tweet_id: candidate.tweetId,
+    target_author_username: candidate.authorUsername,
+    target_text: candidate.text,
+    target_follower_count: candidate.followerCount,
+    reply_text: replyResult.data.should_reply ? replyResult.data.reply_text : null,
+    should_reply: replyResult.data.should_reply,
+    skip_reason: replyResult.data.should_reply ? null : replyResult.data.reason,
+    run_id: env.githubRunId || null,
+  });
+
+  if (!replyResult.data.should_reply) {
+    logger.info("decided not to reply", { replyId, reason: replyResult.data.reason });
+    return replyId;
+  }
+
+  const issue = await createReplyApprovalIssue({
+    targetAuthorUsername: candidate.authorUsername,
+    targetText: candidate.text,
+    replyText: replyResult.data.reply_text,
+    reason: replyResult.data.reason,
+  });
+  if (issue.number > 0) {
+    setGithubIssue(db, replyId, issue.number, issue.url);
+  }
+
+  logger.info("reply candidate created", { replyId, issueNumber: issue.number });
+
+  // autoモードでも、Claude自身が「返信すべきでない」と判断した場合は当然投稿しない
+  // (should_reply=falseは上のreturnで既に処理済みなので、ここに来る時点でtrue確定)。
+  if (config.approvalMode === "auto") {
+    const reply = getById(db, replyId);
+    if (reply) {
+      await finalizeApprovedReply(db, config, reply);
+    }
+  }
+
+  return replyId;
+}

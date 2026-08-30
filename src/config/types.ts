@@ -21,4 +21,12 @@ export interface AppConfig {
   targetPostsPerDay: number;
   // 直近の投稿候補作成からこの時間(h)未満なら、次の生成をスキップする(連投防止)。
   minSpacingHours: number;
+  // 他アカウントの投稿への返信機能の設定。
+  replySettings: {
+    targetRepliesPerDay: number;
+    minSpacingHours: number;
+    minFollowers: number;
+    maxFollowers: number;
+    keywords: string[];
+  };
 }

@@ -6,6 +6,8 @@
   "scripts": {
     "generate": "tsx src/cli/generate.ts",
     "handle-approval": "tsx src/cli/handleApproval.ts",
+    "generate-reply": "tsx src/cli/generateReply.ts",
+    "handle-reply-approval": "tsx src/cli/handleReplyApproval.ts",
     "sync-products": "tsx src/cli/syncProducts.ts",
     "collect-metrics": "tsx src/cli/collectMetrics.ts",
     "analyze-posting-times": "tsx src/cli/analyzePostingTimes.ts",

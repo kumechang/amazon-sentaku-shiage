@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { PENDING_APPROVAL_LABEL } from "./createApprovalIssue.js";
 
 export type ApprovalDecision = "approve" | "reject" | "ignore";
 
@@ -18,8 +17,9 @@ interface IssueCommentEventPayload {
 
 // issue_commentイベントのペイロード(GITHUB_EVENT_PATHのJSON)から、
 // 「承認」/「却下」/無視すべきコメントかを判定する。
-// pending-approvalラベルが無いIssueへのコメントは無関係な議論とみなし無視する。
-export function parseApprovalEvent(eventPath: string): ApprovalEvent {
+// requiredLabelが付いていないIssueへのコメントは無関係な議論とみなし無視する
+// (投稿承認用のpending-approvalと、返信承認用のpending-reply-approvalの両方で使い回す)。
+export function parseApprovalEvent(eventPath: string, requiredLabel: string): ApprovalEvent {
   const raw = readFileSync(eventPath, "utf-8");
   const payload = JSON.parse(raw) as IssueCommentEventPayload;
 
@@ -27,7 +27,7 @@ export function parseApprovalEvent(eventPath: string): ApprovalEvent {
   const commentBody = payload.comment.body;
   const commenter = payload.comment.user.login;
 
-  const hasPendingLabel = payload.issue.labels.some((label) => label.name === PENDING_APPROVAL_LABEL);
+  const hasPendingLabel = payload.issue.labels.some((label) => label.name === requiredLabel);
   if (!hasPendingLabel) {
     return { decision: "ignore", issueNumber, commenter, commentBody };
   }

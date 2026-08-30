@@ -34,3 +34,24 @@ export async function postTweet(text: string, charLimit: number): Promise<PostTw
     tweetUrl: `https://x.com/i/web/status/${tweetId}`,
   };
 }
+
+// 他アカウントの投稿への返信版。文字数ガード・ドライラン挙動はpostTweetと同じ。
+export async function postReply(text: string, inReplyToTweetId: string, charLimit: number): Promise<PostTweetResult> {
+  const weightedLength = getWeightedLength(text);
+  if (weightedLength > charLimit) {
+    throw new TweetTooLongError(`reply exceeds char limit: ${weightedLength} > ${charLimit}`);
+  }
+
+  if (!hasXCredentials()) {
+    logger.warn("X API credentials not configured, skipping actual reply (dry-run)", { text, inReplyToTweetId });
+    return { dryRun: true, tweetId: "", tweetUrl: "" };
+  }
+
+  const result = await getXClient().v2.reply(text, inReplyToTweetId);
+  const tweetId = result.data.id;
+  return {
+    dryRun: false,
+    tweetId,
+    tweetUrl: `https://x.com/i/web/status/${tweetId}`,
+  };
+}

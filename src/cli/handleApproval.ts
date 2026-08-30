@@ -1,6 +1,7 @@
 import { getDb } from "../db/client.js";
 import { loadConfig } from "../config/loadConfig.js";
 import { parseApprovalEvent } from "../github/parseApprovalEvent.js";
+import { PENDING_APPROVAL_LABEL } from "../github/createApprovalIssue.js";
 import {
   getPostByIssueNumber,
   markApproved,
@@ -20,7 +21,7 @@ async function main(): Promise<void> {
     throw new Error("GITHUB_EVENT_PATH is not set");
   }
 
-  const event = parseApprovalEvent(eventPath);
+  const event = parseApprovalEvent(eventPath, PENDING_APPROVAL_LABEL);
   if (event.decision === "ignore") {
     logger.info("comment ignored (no matching label or keyword)", { issueNumber: event.issueNumber });
     return;

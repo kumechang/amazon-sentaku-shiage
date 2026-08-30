@@ -70,3 +70,32 @@ CREATE TABLE IF NOT EXISTS posting_time_weights (
   reason TEXT,              -- Claudeが重みをそう判断した理由(監査用)
   updated_at TEXT
 );
+
+-- 他アカウントの投稿への返信候補。postsテーブルとはライフサイクル・フィールドが異なる
+-- (相手の投稿情報を持つ)ため独立したテーブルにしている。
+CREATE TABLE IF NOT EXISTS reply_candidates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source TEXT NOT NULL,              -- 'keyword' | 'watched_account'
+  target_tweet_id TEXT NOT NULL UNIQUE, -- UNIQUE制約で同じ投稿への重複返信を防ぐ
+  target_author_username TEXT NOT NULL,
+  target_text TEXT NOT NULL,
+  target_follower_count INTEGER,
+  reply_text TEXT,                   -- should_reply=falseならNULL
+  should_reply INTEGER NOT NULL,     -- Claudeの判断(0/1)
+  skip_reason TEXT,                  -- should_reply=falseの理由
+  status TEXT NOT NULL DEFAULT 'pending_approval',
+    -- pending_approval | approved | rejected | posted | posted_dryrun | post_failed | skipped
+  github_issue_number INTEGER UNIQUE,
+  github_issue_url TEXT,
+  approved_by TEXT,
+  approval_comment_body TEXT,
+  reply_tweet_id TEXT,
+  reply_tweet_url TEXT,
+  post_error TEXT,
+  run_id TEXT,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  approved_at TEXT,
+  posted_at TEXT,
+  updated_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_reply_candidates_status ON reply_candidates(status);
