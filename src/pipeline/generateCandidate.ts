@@ -88,8 +88,9 @@ export async function generateCandidate(db: Database.Database, config: AppConfig
   const MAX_SHORTEN_ATTEMPTS = 3;
   for (let attempt = 1; weightedLength > config.xCharLimit && attempt <= MAX_SHORTEN_ATTEMPTS; attempt++) {
     logger.warn("still over char limit, applying a dedicated shorten pass", { attempt, length: weightedLength });
-    finalText = await shortenText(config.claudeModel, finalText, config.xCharLimit);
+    finalText = await shortenText(config.claudeModel, finalText, config.xCharLimit, attempt);
     weightedLength = getWeightedLength(finalText);
+    logger.warn("shorten pass result", { attempt, length: weightedLength });
   }
 
   if (weightedLength > config.xCharLimit) {
