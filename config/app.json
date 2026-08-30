@@ -21,5 +21,9 @@
     "minFollowers": 50,
     "maxFollowers": 50000,
     "keywords": ["部屋干し", "柔軟剤", "生乾き臭", "洗濯あるある"]
+  },
+  "mentionReplySettings": {
+    "maxRepliesPerRun": 5,
+    "maxRepliesPerDay": 5
   }
 }

@@ -21,12 +21,17 @@ export interface AppConfig {
   targetPostsPerDay: number;
   // 直近の投稿候補作成からこの時間(h)未満なら、次の生成をスキップする(連投防止)。
   minSpacingHours: number;
-  // 他アカウントの投稿への返信機能の設定。
+  // 他アカウントの投稿への返信機能の設定(能動的アプローチ。手動投稿の下書き支援のみ)。
   replySettings: {
     targetRepliesPerDay: number;
     minSpacingHours: number;
     minFollowers: number;
     maxFollowers: number;
     keywords: string[];
+  };
+  // 自分が@メンションされた投稿への返信設定(X APIの仕様上ここのみ自動投稿可能)。
+  mentionReplySettings: {
+    maxRepliesPerRun: number;
+    maxRepliesPerDay: number;
   };
 }

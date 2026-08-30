@@ -1,11 +1,13 @@
 // handle-reply-approval.yml (issue_commentイベント)から実行されるエントリポイント。
-// handleApproval.tsの返信版だが、2026年2月のX API仕様変更でメンション/引用されていない
-// 投稿への自動返信ができなくなったため、「承認」しても自動投稿はしない
-// (下書きとして確定させ、手動投稿を促すだけ)。
+// handleApproval.tsの返信版。sourceによって承認時の挙動が異なる:
+// - keyword/watched_account: X APIの仕様上、自動投稿できないため下書き確定のみ
+// - mention: 自分がメンションされた投稿なので、API経由で実際に返信する
 import { getDb } from "../db/client.js";
+import { loadConfig } from "../config/loadConfig.js";
 import { parseApprovalEvent } from "../github/parseApprovalEvent.js";
 import { PENDING_REPLY_APPROVAL_LABEL } from "../github/createReplyApprovalIssue.js";
-import { getByIssueNumber, markApproved, markRejected } from "../db/repositories/replyCandidatesRepo.js";
+import { getByIssueNumber, markApproved, markRejected, getById } from "../db/repositories/replyCandidatesRepo.js";
+import { finalizeApprovedReply } from "../pipeline/finalizeApprovedReply.js";
 import { closeIssueWithResult, commentOnIssue } from "../github/closeIssueWithResult.js";
 import { logger } from "../lib/logger.js";
 
@@ -22,6 +24,7 @@ async function main(): Promise<void> {
   }
 
   const db = getDb();
+  const config = loadConfig();
 
   const reply = getByIssueNumber(db, event.issueNumber);
   if (!reply) {
@@ -29,7 +32,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const actionable = reply.status === "pending_approval";
+  const actionable = reply.status === "pending_approval" || reply.status === "post_failed";
   if (!actionable) {
     await commentOnIssue(event.issueNumber, `この返信は既に処理済みです(状態: ${reply.status})。`);
     logger.info("reply already processed, no-op", { issueNumber: event.issueNumber, status: reply.status });
@@ -44,11 +47,24 @@ async function main(): Promise<void> {
   }
 
   markApproved(db, reply.id, event.commenter, event.commentBody);
-  await closeIssueWithResult(
-    event.issueNumber,
-    `@${event.commenter} により承認されました。上のリンクから対象投稿を開き、返信案を手動でコピー&投稿してください(自動投稿は行われません)。`
-  );
-  logger.info("reply approved (manual posting required)", { replyId: reply.id });
+
+  if (reply.source !== "mention") {
+    // keyword/watched_account: X APIの仕様上、メンション/引用されていない投稿への
+    // 自動返信はできないため、下書きとして確定させるだけに留める。
+    await closeIssueWithResult(
+      event.issueNumber,
+      `@${event.commenter} により承認されました。上のリンクから対象投稿を開き、返信案を手動でコピー&投稿してください(自動投稿は行われません)。`
+    );
+    logger.info("reply approved (manual posting required)", { replyId: reply.id });
+    return;
+  }
+
+  // mention: 自分がメンションされた投稿への返信はAPI経由で許可されているため、実際に投稿する。
+  const approvedReply = getById(db, reply.id);
+  if (!approvedReply) throw new Error("reply candidate disappeared after approval update");
+
+  await finalizeApprovedReply(db, config, approvedReply);
+  logger.info("mention reply approved and finalized", { replyId: reply.id });
 }
 
 main().catch((error) => {

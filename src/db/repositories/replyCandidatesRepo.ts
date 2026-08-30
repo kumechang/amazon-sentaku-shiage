@@ -12,8 +12,12 @@ export type ReplyCandidateStatus =
   | "post_failed"
   | "skipped";
 
+// keyword/watched_account: 能動的アプローチ(検索して見つけた投稿への返信、手動投稿の下書き支援のみ)。
+// mention: 自分が@メンションされた投稿への返信(X APIの仕様上ここのみ自動投稿が可能)。
+export type ReplyCandidateSource = "keyword" | "watched_account" | "mention";
+
 export interface CreateReplyCandidateInput {
-  source: "keyword" | "watched_account";
+  source: ReplyCandidateSource;
   target_tweet_id: string;
   target_author_username: string;
   target_text: string;
@@ -26,7 +30,7 @@ export interface CreateReplyCandidateInput {
 
 export interface ReplyCandidateRow {
   id: number;
-  source: string;
+  source: ReplyCandidateSource;
   target_tweet_id: string;
   target_author_username: string;
   target_text: string;
@@ -114,6 +118,30 @@ export function getLastReplyCreatedAt(db: Database.Database): string | null {
     .prepare(`SELECT MAX(created_at) as last_created FROM reply_candidates WHERE should_reply = 1`)
     .get() as { last_created: string | null };
   return row.last_created;
+}
+
+// generateMentionReplies用: 直近取得したメンションのtweet_id(since_id指定に使い、
+// 毎回全件取得し直すのを避ける)。
+export function getLastMentionTargetTweetId(db: Database.Database): string | null {
+  const row = db
+    .prepare(
+      `SELECT target_tweet_id FROM reply_candidates WHERE source = 'mention' ORDER BY id DESC LIMIT 1`
+    )
+    .get() as { target_tweet_id: string } | undefined;
+  return row?.target_tweet_id ?? null;
+}
+
+// generateMentionReplies用: 指定したJSTカレンダー日にメンション経由で作成された返信候補数
+// (should_reply=trueのみ)。keyword/watched_account用の予算とは別プールで管理する。
+export function countMentionRepliesCreatedOnJstDate(db: Database.Database, jstDateString: string): number {
+  const rows = db
+    .prepare(
+      `SELECT created_at FROM reply_candidates
+       WHERE source = 'mention' AND should_reply = 1
+         AND created_at >= datetime(?, '-1 day') AND created_at <= datetime(?, '+1 day')`
+    )
+    .all(jstDateString, jstDateString) as { created_at: string }[];
+  return rows.filter((row) => getJstDateString(parseDbTimestamp(row.created_at)) === jstDateString).length;
 }
 
 export function markApproved(db: Database.Database, id: number, approvedBy: string, commentBody: string): void {

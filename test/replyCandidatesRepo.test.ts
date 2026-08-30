@@ -7,6 +7,8 @@ import {
   getByTargetTweetId,
   countRepliesCreatedOnJstDate,
   getLastReplyCreatedAt,
+  countMentionRepliesCreatedOnJstDate,
+  getLastMentionTargetTweetId,
 } from "../src/db/repositories/replyCandidatesRepo.js";
 import { getJstDateString } from "../src/lib/time.js";
 
@@ -84,5 +86,63 @@ describe("replyCandidatesRepo", () => {
     });
 
     expect(getLastReplyCreatedAt(db)).toBeNull();
+  });
+
+  it("countMentionRepliesCreatedOnJstDate only counts source='mention' candidates", () => {
+    createReplyCandidate(db, {
+      source: "keyword",
+      target_tweet_id: "1",
+      target_author_username: "a",
+      target_text: "text",
+      target_follower_count: 100,
+      reply_text: "reply",
+      should_reply: true,
+      skip_reason: null,
+      run_id: null,
+    });
+    createReplyCandidate(db, {
+      source: "mention",
+      target_tweet_id: "2",
+      target_author_username: "b",
+      target_text: "text",
+      target_follower_count: null,
+      reply_text: "reply",
+      should_reply: true,
+      skip_reason: null,
+      run_id: null,
+    });
+
+    const today = getJstDateString(new Date());
+    expect(countMentionRepliesCreatedOnJstDate(db, today)).toBe(1);
+  });
+
+  it("getLastMentionTargetTweetId ignores non-mention sources", () => {
+    expect(getLastMentionTargetTweetId(db)).toBeNull();
+
+    createReplyCandidate(db, {
+      source: "keyword",
+      target_tweet_id: "keyword-1",
+      target_author_username: "a",
+      target_text: "text",
+      target_follower_count: 100,
+      reply_text: "reply",
+      should_reply: true,
+      skip_reason: null,
+      run_id: null,
+    });
+    expect(getLastMentionTargetTweetId(db)).toBeNull();
+
+    createReplyCandidate(db, {
+      source: "mention",
+      target_tweet_id: "mention-1",
+      target_author_username: "b",
+      target_text: "text",
+      target_follower_count: null,
+      reply_text: "reply",
+      should_reply: true,
+      skip_reason: null,
+      run_id: null,
+    });
+    expect(getLastMentionTargetTweetId(db)).toBe("mention-1");
   });
 });
