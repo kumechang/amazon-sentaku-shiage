@@ -5,6 +5,7 @@ import { markPosted, markPostedDryRun, markPostFailed } from "../db/repositories
 import { postReply, TweetTooLongError } from "../x/postTweet.js";
 import { closeIssueWithResult, commentOnIssue } from "../github/closeIssueWithResult.js";
 import { logger } from "../lib/logger.js";
+import { describeXApiError } from "../lib/xErrorMessage.js";
 
 // 承認済み返信の最終処理(X返信投稿→DB更新→Issue通知)。finalizeApprovedPost.tsと同型で、
 // 手動承認フロー(handleReplyApproval.ts)・autoモードの即時投稿(generateReplyCandidate.ts)の
@@ -42,7 +43,9 @@ export async function finalizeApprovedReply(
     logger.info("reply finalized", { replyId: reply.id, tweetUrl: result.tweetUrl });
   } catch (error) {
     const message =
-      error instanceof TweetTooLongError ? `文字数超過のため返信できませんでした: ${error.message}` : String(error);
+      error instanceof TweetTooLongError
+        ? `文字数超過のため返信できませんでした: ${error.message}`
+        : describeXApiError(error);
     markPostFailed(db, reply.id, message);
     if (issueNumber) {
       await commentOnIssue(issueNumber, `返信に失敗しました: ${message}`);
