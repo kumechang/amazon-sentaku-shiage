@@ -161,6 +161,7 @@ async function runGenerateAndSelfCheck(
     strategy: ctx.strategy,
     productInfo: ctx.productInfo,
     charLimit: config.xCharLimit,
+    passThreshold: config.selfCheckPassThreshold,
   });
 
   return { generatedText, selfCheckResult };
