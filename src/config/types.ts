@@ -1,6 +1,11 @@
 // config/app.json の型定義。
 export interface AppConfig {
+  // メンション返信(generateMentionReplies.ts)の自動投稿可否。X APIの仕様上ここのみ
+  // 自動投稿が許可されているが、実運用でまだ検証していないため現状はmanual運用。
   approvalMode: "manual" | "auto";
+  // 通常投稿(generateCandidate.ts)の自動投稿可否。承認フローの信頼性が上がってきたため
+  // approvalModeとは別フラグにして、メンション返信とは独立に切り替えられるようにしている。
+  postApprovalMode: "manual" | "auto";
   claudeModel: string;
   selfCheckPassThreshold: number;
   platform: string;

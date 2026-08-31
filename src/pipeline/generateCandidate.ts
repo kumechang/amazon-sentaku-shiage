@@ -124,7 +124,7 @@ export async function generateCandidate(db: Database.Database, config: AppConfig
 
   // autoモードでも、セルフチェック不合格(pass=false)の場合は必ず人の承認待ちに倒す。
   // 自動投稿がセルフチェックをバイパスすることは無いようにする安全策。
-  if (config.approvalMode === "auto" && selfCheckResult.data.pass) {
+  if (config.postApprovalMode === "auto" && selfCheckResult.data.pass) {
     const post = getPostById(db, postId);
     if (post) {
       await finalizeApprovedPost(db, config, post);

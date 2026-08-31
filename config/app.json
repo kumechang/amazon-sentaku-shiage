@@ -1,5 +1,6 @@
 {
   "approvalMode": "manual",
+  "postApprovalMode": "auto",
   "claudeModel": "claude-sonnet-5",
   "selfCheckPassThreshold": 80,
   "platform": "X",
