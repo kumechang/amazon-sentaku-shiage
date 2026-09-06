@@ -154,6 +154,7 @@ async function runGenerateAndSelfCheck(
     recentPosts: ctx.recentPosts,
     platform: config.platform,
     charLimit: config.xCharLimit,
+    hashtagPool: config.postHashtags,
   });
 
   const selfCheckResult = await runSelfCheckStage(config.claudeModel, {

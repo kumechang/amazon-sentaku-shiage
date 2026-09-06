@@ -41,7 +41,7 @@ export async function runSelfCheckStage(
   const prompt = renderPrompt(template, {
     generated_post: input.generatedPost,
     post_strategy: JSON.stringify(input.strategy),
-    product_info: `【合格基準】文中に「80点以上で合格」とありますが、${input.passThreshold}点以上を合格としてください(この基準を優先してください)。\n【文字数制約】final_postは全角${input.charLimit}文字を絶対に超えないでください。修正する場合も文字数を必ず守ってください。\n\n${input.productInfo}`,
+    product_info: `【合格基準】文中に「80点以上で合格」とありますが、${input.passThreshold}点以上を合格としてください(この基準を優先してください)。\n【文字数制約】final_postは全角${input.charLimit}文字を絶対に超えないでください。修正する場合も文字数を必ず守ってください。\n【ハッシュタグ】投稿本文の末尾にハッシュタグがある場合は、修正時もそのまま維持してください。\n\n${input.productInfo}`,
   });
   return callClaudeJson(model, prompt, selfCheckSchema);
 }

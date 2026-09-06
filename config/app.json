@@ -16,6 +16,7 @@
   },
   "targetPostsPerDay": 4,
   "minSpacingHours": 2,
+  "postHashtags": ["部屋干し", "柔軟剤", "生乾き臭", "洗濯あるある"],
   "replySettings": {
     "targetRepliesPerDay": 10,
     "minSpacingHours": 1,

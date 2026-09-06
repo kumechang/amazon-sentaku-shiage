@@ -26,6 +26,9 @@ export interface AppConfig {
   targetPostsPerDay: number;
   // 直近の投稿候補作成からこの時間(h)未満なら、次の生成をスキップする(連投防止)。
   minSpacingHours: number;
+  // 投稿末尾に付けるハッシュタグの候補プール。空配列なら注入自体を行わない
+  // (replySettings.keywordsと同じ「空なら機能オフ」の運用)。
+  postHashtags: string[];
   // 他アカウントの投稿への返信機能の設定(能動的アプローチ。手動投稿の下書き支援のみ)。
   replySettings: {
     targetRepliesPerDay: number;
