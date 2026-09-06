@@ -18,13 +18,23 @@ export function getDb(): Database.Database {
   db.exec(schema);
 
   // CREATE TABLE IF NOT EXISTSは既存テーブルへの列追加はしないため、
-  // 既にreply_candidatesが存在するDBに対してはここでガード付きALTERする。
-  const hasMatchedKeyword = db
-    .prepare(`SELECT 1 FROM pragma_table_info('reply_candidates') WHERE name = 'matched_keyword'`)
-    .get();
-  if (!hasMatchedKeyword) {
-    db.exec(`ALTER TABLE reply_candidates ADD COLUMN matched_keyword TEXT`);
-  }
+  // 既にテーブルが存在するDBに対してはここでガード付きALTERする。
+  ensureColumn(db, "reply_candidates", "matched_keyword", "TEXT");
+  ensureColumn(db, "posts", "reply_kind", "TEXT");
+  ensureColumn(db, "posts", "tip_text", "TEXT");
+  ensureColumn(db, "posts", "tip_poll_options", "TEXT");
+  ensureColumn(db, "posts", "tip_selfcheck_json", "TEXT");
+  ensureColumn(db, "posts", "tip_self_check_score", "INTEGER");
+  ensureColumn(db, "posts", "tip_self_check_pass", "INTEGER");
+  ensureColumn(db, "posts", "tip_tweet_id", "TEXT");
+  ensureColumn(db, "posts", "tip_tweet_url", "TEXT");
 
   return db;
+}
+
+function ensureColumn(db: Database.Database, table: string, column: string, ddlType: string): void {
+  const exists = db.prepare(`SELECT 1 FROM pragma_table_info(?) WHERE name = ?`).get(table, column);
+  if (!exists) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddlType}`);
+  }
 }

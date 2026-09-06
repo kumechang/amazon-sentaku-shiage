@@ -39,6 +39,14 @@ CREATE TABLE IF NOT EXISTS posts (
   tweet_url TEXT,
   post_error TEXT,             -- 投稿失敗時のエラーメッセージ
   run_id TEXT,                 -- GitHub ActionsのRun ID(トレース用)
+  reply_kind TEXT,              -- 'tip' | 'poll' | NULL(Tipsスレッド化していない投稿)
+  tip_text TEXT,                 -- tip: 解決策本文 / poll: 質問文
+  tip_poll_options TEXT,         -- pollの選択肢(JSON配列文字列)。tipならNULL
+  tip_selfcheck_json TEXT,       -- tipのみ(pollはセルフチェックしない)
+  tip_self_check_score INTEGER,
+  tip_self_check_pass INTEGER,
+  tip_tweet_id TEXT,
+  tip_tweet_url TEXT,
   created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
   approved_at TEXT,
   posted_at TEXT,

@@ -48,10 +48,31 @@ export function buildPostConditions(db: Database.Database, config: AppConfig): s
   const ratioHint = buildProductRatioHint(db, config);
   if (ratioHint) lines.push(ratioHint);
 
+  const problemTypeHint = buildProblemTypeHint(db, config);
+  if (problemTypeHint) lines.push(problemTypeHint);
+
   const rejectionHint = buildRejectionHint(db, config);
   if (rejectionHint) lines.push(rejectionHint);
 
   return lines.join("\n");
+}
+
+// 直近window件に占めるproblemタイプの比率が目標を下回っていたら、優先を促すヒントを返す。
+// Tipsスレッド化(generateCandidate.ts)はpost_type="problem"を起点にしているため、
+// この比率を上げることでスレッド形式の投稿頻度も上がる。
+function buildProblemTypeHint(db: Database.Database, config: AppConfig): string | null {
+  const counts = countRecentByPostType(db, config.recentPostsWindow);
+  const total = Object.values(counts).reduce((sum, n) => sum + n, 0);
+  if (total === 0) return null;
+
+  const problemRatio = (counts.problem ?? 0) / total;
+  if (problemRatio >= config.targetProblemRatio) return null;
+
+  return (
+    "直近の投稿でproblemタイプ(悩み・問題提起・解決策)の比率が目標を下回っています。\n" +
+    "今回は可能であればpost_typeを\"problem\"にすることを検討してください。\n" +
+    "ただし不自然に無理やり悩みを作らないでください。"
+  );
 }
 
 // 人がGitHub Issueで却下した際に理由(例:「却下 もう少し日常的な感じがいい」)を書いていれば、

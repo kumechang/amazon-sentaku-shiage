@@ -10,6 +10,7 @@ export interface GenerateStageInput {
   platform: string;
   charLimit: number;
   hashtagPool: string[];
+  extraInstruction?: string;
 }
 
 // パイプライン第2段階: 第1段階の戦略JSONに従って実際の投稿本文を生成する。
@@ -22,6 +23,9 @@ export interface GenerateStageInput {
 //
 // ハッシュタグ未使用でインプレッションがほぼ0件だったため、同じ手法で
 // ハッシュタグ付与の指示も追加する(hashtagPoolが空ならこれまで通り何も注入しない)。
+//
+// extraInstructionは、Tipsスレッド化(problemタイプを2件のツイートに分割する)のような
+// 呼び出し側固有の追加指示を注入するための汎用フック。指定が無ければ何も追記しない。
 export async function runGenerateStage(model: string, input: GenerateStageInput): Promise<string> {
   // 実際の上限ぴったりを目安として伝えると超過しがちなため、8割程度を目標値として
   // 提示しつつ上限も明記し、狙いより短めに収まりやすくする。
@@ -40,7 +44,7 @@ export async function runGenerateStage(model: string, input: GenerateStageInput)
     product_info: input.productInfo,
     post_strategy: JSON.stringify(input.strategy),
     recent_posts: input.recentPosts,
-    platform: `${input.platform}(【重要】投稿本文は全角${targetChars}文字程度を目標にし、絶対に全角${input.charLimit}文字を超えないでください。超えそうな場合は表現を削って短くしてください)${hashtagInstruction}`,
+    platform: `${input.platform}(【重要】投稿本文は全角${targetChars}文字程度を目標にし、絶対に全角${input.charLimit}文字を超えないでください。超えそうな場合は表現を削って短くしてください)${hashtagInstruction}${input.extraInstruction ? `\n${input.extraInstruction}` : ""}`,
   });
   const text = await callClaude(model, prompt);
   return text.trim();

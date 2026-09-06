@@ -55,3 +55,34 @@ export async function postReply(text: string, inReplyToTweetId: string, charLimi
     tweetUrl: `https://x.com/i/web/status/${tweetId}`,
   };
 }
+
+// Tipsスレッドの投票版返信。自分自身の投稿への返信のため、通常のpostReplyと同じくX APIの
+// 反スパム制限の対象外(投稿者本人)。twitter-api-v2のreply()はpayload引数をそのまま
+// リクエストボディへマージするため、poll指定もこの形で渡せる。
+export async function postPollReply(
+  text: string,
+  inReplyToTweetId: string,
+  options: string[],
+  durationMinutes: number,
+  charLimit: number
+): Promise<PostTweetResult> {
+  const weightedLength = getWeightedLength(text);
+  if (weightedLength > charLimit) {
+    throw new TweetTooLongError(`poll reply exceeds char limit: ${weightedLength} > ${charLimit}`);
+  }
+
+  if (!hasXCredentials()) {
+    logger.warn("X API credentials not configured, skipping actual poll reply (dry-run)", { text, inReplyToTweetId });
+    return { dryRun: true, tweetId: "", tweetUrl: "" };
+  }
+
+  const result = await getXClient().v2.reply(text, inReplyToTweetId, {
+    poll: { options, duration_minutes: durationMinutes },
+  });
+  const tweetId = result.data.id;
+  return {
+    dryRun: false,
+    tweetId,
+    tweetUrl: `https://x.com/i/web/status/${tweetId}`,
+  };
+}

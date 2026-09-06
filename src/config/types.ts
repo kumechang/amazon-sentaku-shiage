@@ -29,6 +29,13 @@ export interface AppConfig {
   // 投稿末尾に付けるハッシュタグの候補プール。空配列なら注入自体を行わない
   // (replySettings.keywordsと同じ「空なら機能オフ」の運用)。
   postHashtags: string[];
+  // 直近投稿に占めるproblemタイプ(悩み・問題提起・解決策)の目標比率。
+  // 下回っている場合、post_conditions経由でproblemタイプを優先するよう促す。
+  targetProblemRatio: number;
+  // problemタイプがTipsスレッド化された際、2件目を投票(poll)にする確率(残りはTips解説文)。
+  pollReplyRatio: number;
+  // Tipsスレッドの投票の受付時間(分)。
+  pollDurationMinutes: number;
   // 他アカウントの投稿への返信機能の設定(能動的アプローチ。手動投稿の下書き支援のみ)。
   replySettings: {
     targetRepliesPerDay: number;

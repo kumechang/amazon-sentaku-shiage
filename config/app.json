@@ -17,6 +17,9 @@
   "targetPostsPerDay": 4,
   "minSpacingHours": 2,
   "postHashtags": ["部屋干し", "柔軟剤", "生乾き臭", "洗濯あるある"],
+  "targetProblemRatio": 0.6,
+  "pollReplyRatio": 0.2,
+  "pollDurationMinutes": 1440,
   "replySettings": {
     "targetRepliesPerDay": 10,
     "minSpacingHours": 1,

@@ -10,6 +10,10 @@ export const PENDING_APPROVAL_LABEL = "pending-approval";
 
 export interface ApprovalIssueContent {
   finalText: string;
+  // Tipsスレッド(problemタイプの2件目)の場合のみ非null。
+  // tipPollOptionsがあれば投票案、tipTextのみあればTipsリプライ案として表示する。
+  tipText: string | null;
+  tipPollOptions: string[] | null;
   strategy: Strategy;
   selfCheck: SelfCheckResult;
 }
@@ -22,16 +26,28 @@ export interface CreatedIssue {
 // Issue本文を組み立てる。承認者が本文だけを見て判断できるよう、投稿候補・スコア・
 // 指摘事項・改善点・承認方法をひとまとめにする。
 export function buildIssueBody(content: ApprovalIssueContent): string {
-  const { finalText, strategy, selfCheck } = content;
+  const { finalText, tipText, tipPollOptions, strategy, selfCheck } = content;
   const problems = selfCheck.problems.length > 0 ? selfCheck.problems.map((p) => `- ${p}`).join("\n") : "(なし)";
   const improvements =
     selfCheck.improvements.length > 0 ? selfCheck.improvements.map((i) => `- ${i}`).join("\n") : "(なし)";
 
-  return [
-    "## 投稿候補",
+  const threadSection = tipPollOptions
+    ? [
+        "",
+        "## 2件目(自分への返信・投票)",
+        tipText ?? "",
+        ...tipPollOptions.map((option, i) => `${i + 1}. ${option}`),
+      ]
+    : tipText
+      ? ["", "## 2件目(自分への返信・Tipsリプライ案)", "```", tipText, "```"]
+      : [];
+
+  const lines = [
+    "## 投稿候補(1件目)",
     "```",
     finalText,
     "```",
+    ...threadSection,
     "",
     `## スコア: ${selfCheck.score} / 100 (${selfCheck.pass ? "合格" : "不合格 → 自動修正済み"})`,
     "",
@@ -47,7 +63,10 @@ export function buildIssueBody(content: ApprovalIssueContent): string {
     "---",
     "この投稿を承認する場合はコメントで「承認」、却下する場合は「却下」と入力してください。",
     "却下する場合、「却下 もう少し日常的な感じがいい」のように理由を続けて書くと、次回以降の投稿生成の参考にされます。",
-  ].join("\n");
+  ];
+  if (tipText) lines.push("(承認すると2件目も含めて自動投稿されます)");
+
+  return lines.join("\n");
 }
 
 export async function createApprovalIssue(content: ApprovalIssueContent): Promise<CreatedIssue> {

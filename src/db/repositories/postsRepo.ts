@@ -23,6 +23,14 @@ export interface CreatePostInput {
   self_check_score: number | null;
   self_check_pass: boolean;
   run_id: string | null;
+  // Tipsスレッド化(post_type="problem"を2件のツイートに分割する)関連。
+  // スレッド化しない投稿ではすべてnull。
+  reply_kind: "tip" | "poll" | null;
+  tip_text: string | null;
+  tip_poll_options: string[] | null;
+  tip_selfcheck_json: string | null;
+  tip_self_check_score: number | null;
+  tip_self_check_pass: boolean | null;
 }
 
 export interface PostRow {
@@ -46,6 +54,14 @@ export interface PostRow {
   tweet_url: string | null;
   post_error: string | null;
   run_id: string | null;
+  reply_kind: "tip" | "poll" | null;
+  tip_text: string | null;
+  tip_poll_options: string | null; // JSON配列文字列のまま保持(パースは呼び出し側)
+  tip_selfcheck_json: string | null;
+  tip_self_check_score: number | null;
+  tip_self_check_pass: number | null;
+  tip_tweet_id: string | null;
+  tip_tweet_url: string | null;
   created_at: string;
   approved_at: string | null;
   posted_at: string | null;
@@ -57,8 +73,8 @@ export interface PostRow {
 export function createPost(db: Database.Database, input: CreatePostInput): number {
   const result = db
     .prepare(
-      `INSERT INTO posts (platform, product_id, post_type, product_usage, strategy_json, generated_text, selfcheck_json, final_text, self_check_score, self_check_pass, status, run_id, updated_at)
-       VALUES (@platform, @product_id, @post_type, @product_usage, @strategy_json, @generated_text, @selfcheck_json, @final_text, @self_check_score, @self_check_pass, 'pending_approval', @run_id, CURRENT_TIMESTAMP)`
+      `INSERT INTO posts (platform, product_id, post_type, product_usage, strategy_json, generated_text, selfcheck_json, final_text, self_check_score, self_check_pass, status, run_id, reply_kind, tip_text, tip_poll_options, tip_selfcheck_json, tip_self_check_score, tip_self_check_pass, updated_at)
+       VALUES (@platform, @product_id, @post_type, @product_usage, @strategy_json, @generated_text, @selfcheck_json, @final_text, @self_check_score, @self_check_pass, 'pending_approval', @run_id, @reply_kind, @tip_text, @tip_poll_options, @tip_selfcheck_json, @tip_self_check_score, @tip_self_check_pass, CURRENT_TIMESTAMP)`
     )
     .run({
       platform: input.platform,
@@ -72,6 +88,12 @@ export function createPost(db: Database.Database, input: CreatePostInput): numbe
       self_check_score: input.self_check_score,
       self_check_pass: input.self_check_pass ? 1 : 0,
       run_id: input.run_id,
+      reply_kind: input.reply_kind,
+      tip_text: input.tip_text,
+      tip_poll_options: input.tip_poll_options ? JSON.stringify(input.tip_poll_options) : null,
+      tip_selfcheck_json: input.tip_selfcheck_json,
+      tip_self_check_score: input.tip_self_check_score,
+      tip_self_check_pass: input.tip_self_check_pass === null ? null : input.tip_self_check_pass ? 1 : 0,
     });
   return Number(result.lastInsertRowid);
 }
@@ -242,4 +264,17 @@ export function markPostFailed(db: Database.Database, id: number, error: string)
   db.prepare(
     `UPDATE posts SET status = 'post_failed', post_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
   ).run(error, id);
+}
+
+// Tipsスレッドの2件目(tip/poll)が投稿できた場合。メイン(1件目)は既にmarkPosted済みの前提。
+export function markTipPosted(db: Database.Database, id: number, tipTweetId: string, tipTweetUrl: string): void {
+  db.prepare(
+    `UPDATE posts SET tip_tweet_id = ?, tip_tweet_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+  ).run(tipTweetId, tipTweetUrl, id);
+}
+
+// メイン(1件目)は投稿済みだが、2件目(tip/poll)の投稿に失敗した場合。
+// メインは実際に世に出ているため、statusは'posted'のまま変更せず、post_errorにのみ記録する。
+export function markTipPostFailed(db: Database.Database, id: number, error: string): void {
+  db.prepare(`UPDATE posts SET post_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(error, id);
 }
