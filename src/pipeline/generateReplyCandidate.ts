@@ -27,17 +27,32 @@ function loadWatchedUsernames(): string[] {
   return entries.filter((entry) => entry.active).map((entry) => entry.username);
 }
 
-// フォロワー数条件・重複除外を満たす、未処理の候補を1件選ぶ。
-// キーワード検索とウォッチ対象検索の結果を結合し、先勝ちで最初に条件を満たしたものを採用する。
+function isFreshCandidate(db: Database.Database, candidate: SearchCandidate): boolean {
+  if (!candidate.authorUsername) return false;
+  if (getByTargetTweetId(db, candidate.tweetId)) return false; // 重複除外
+  return true;
+}
+
+// 未処理の候補を1件選ぶ。ウォッチ対象アカウントを常に優先する。
+//
+// ウォッチ対象アカウント(data/watched_accounts.json)は、フォロワー1万人以上の
+// 「憧れのアカウント」を人力で選定して登録する運用(README参照)のため、
+// replySettings.minFollowers/maxFollowers(キーワード検索のノイズ除去用の目安レンジ)は適用しない。
+// これを適用すると、まさに狙いたい大きめのアカウント(maxFollowersを超える)が
+// フィルタで弾かれてしまう。
 function pickCandidate(
   db: Database.Database,
-  candidates: SearchCandidate[],
+  watchedCandidates: SearchCandidate[],
+  keywordCandidates: SearchCandidate[],
   config: AppConfig
 ): SearchCandidate | null {
+  for (const candidate of watchedCandidates) {
+    if (isFreshCandidate(db, candidate)) return candidate;
+  }
+
   const { minFollowers, maxFollowers } = config.replySettings;
-  for (const candidate of candidates) {
-    if (!candidate.authorUsername) continue;
-    if (getByTargetTweetId(db, candidate.tweetId)) continue; // 重複除外
+  for (const candidate of keywordCandidates) {
+    if (!isFreshCandidate(db, candidate)) continue;
     if (candidate.followerCount === null) continue;
     if (candidate.followerCount < minFollowers || candidate.followerCount > maxFollowers) continue;
     return candidate;
@@ -88,7 +103,7 @@ export async function generateReplyCandidate(db: Database.Database, config: AppC
   // ウォッチ対象アカウントの投稿を優先する(キーワードよりジャンル適合度が高いと見なす)。
   // キーワード由来の候補群は、学習済みの重み(承認されやすいキーワードほど高い)で並べ替える。
   const sortedKeywordResults = sortKeywordResultsByWeight(db, keywordResults, config.replySettings.keywords);
-  const candidate = pickCandidate(db, [...watchedResults, ...sortedKeywordResults], config);
+  const candidate = pickCandidate(db, watchedResults, sortedKeywordResults, config);
   if (!candidate) {
     logger.info("no reply candidates found this run");
     return null;

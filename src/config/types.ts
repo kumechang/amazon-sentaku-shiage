@@ -40,6 +40,9 @@ export interface AppConfig {
   replySettings: {
     targetRepliesPerDay: number;
     minSpacingHours: number;
+    // キーワード検索で見つけた候補にのみ適用するフォロワー数レンジ(ノイズ除去用)。
+    // ウォッチ対象アカウント(watched_accounts.json)は人力選定済みのため対象外
+    // (generateReplyCandidate.tsのpickCandidate参照)。
     minFollowers: number;
     maxFollowers: number;
     keywords: string[];
