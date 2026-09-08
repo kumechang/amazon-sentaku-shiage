@@ -1,6 +1,7 @@
-# 投稿可能時間帯の間毎時起動し、他アカウントの投稿への返信候補を探す(generate-posts.ymlと同じ
-# 「毎時起動+スロットリング」方式)。検索API自体が有料のため、shouldGenerateReplyNowが
-# trueの場合のみ実際に検索を行う。
+# 投稿可能時間帯の間毎時起動し、discover-replies.ymlが貯めたdiscovered_reply_targets
+# プールから返信候補を1件取り出してClaudeに下書きを作らせる(generate-posts.ymlと同じ
+# 「毎時起動+スロットリング」方式)。検索(X API呼び出し)はここでは行わない
+# (discover-replies.ymlが低頻度に検索して貯める側、ここは消化する側)。
 #
 # 2026年2月のX API仕様変更により、相手が自分をメンション/引用していない投稿への
 # プログラム経由の返信はAPIレベルでブロックされている(Free/Basic/Pro/Pay-Per-Use全ティア対象、
@@ -40,10 +41,6 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          X_API_KEY: ${{ secrets.X_API_KEY }}
-          X_API_SECRET: ${{ secrets.X_API_SECRET }}
-          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
-          X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
         run: npm run generate-reply
 
       - name: Commit DB changes

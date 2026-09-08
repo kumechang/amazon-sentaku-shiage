@@ -1,7 +1,7 @@
 [
   {
     "username": "TODO_example_account",
-    "note": "TODO: 洗濯・仕上げ剤・暮らしジャンルで影響力のあるアカウントを登録してください",
+    "note": "TODO: 洗濯・仕上げ剤・暮らしジャンルで、フォロワー1万人以上の「憧れのアカウント」を5〜10件登録してください。X上でも実際にフォローしておくのがおすすめです。ここに登録したアカウントの投稿はgenerateReplyがフォロワー数レンジ(replySettings.minFollowers/maxFollowers)を気にせず優先的に検索・下書きし、GitHub Issueで提示します(READMEの「アカウント成長戦略」参照。通知はX通知ベルではなく、このリポジトリをGitHub上でWatchしてIssueのメール通知を受け取る運用)。",
     "active": false
   }
 ]

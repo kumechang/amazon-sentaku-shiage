@@ -40,9 +40,15 @@ export interface AppConfig {
   replySettings: {
     targetRepliesPerDay: number;
     minSpacingHours: number;
+    // キーワード検索で見つけた候補にのみ適用するフォロワー数レンジ(ノイズ除去用)。
+    // ウォッチ対象アカウント(watched_accounts.json)は人力選定済みのため対象外
+    // (generateReplyCandidate.tsのpickFromPool参照)。
     minFollowers: number;
     maxFollowers: number;
     keywords: string[];
+    // discovered_reply_targetsプールに貯めた候補の有効期限(時間)。これを超えたら
+    // 返信案を作らず破棄する(古い投稿に今更リプライするのを避けるため)。
+    candidateExpiryHours: number;
   };
   // 自分が@メンションされた投稿への返信設定(X APIの仕様上ここのみ自動投稿可能)。
   mentionReplySettings: {
