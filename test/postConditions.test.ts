@@ -53,7 +53,14 @@ function baseConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     targetProblemRatio: 0.6,
     pollReplyRatio: 0.2,
     pollDurationMinutes: 1440,
-    replySettings: { targetRepliesPerDay: 10, minSpacingHours: 1, minFollowers: 50, maxFollowers: 50000, keywords: [] },
+    replySettings: {
+      targetRepliesPerDay: 10,
+      minSpacingHours: 1,
+      minFollowers: 50,
+      maxFollowers: 50000,
+      keywords: [],
+      candidateExpiryHours: 48,
+    },
     mentionReplySettings: { maxRepliesPerRun: 5, maxRepliesPerDay: 5 },
     ...overrides,
   };

@@ -14,7 +14,7 @@ export const analyzeReplyKeywordsSchema = z.object({
 export type AnalyzeReplyKeywordsResult = z.infer<typeof analyzeReplyKeywordsSchema>;
 
 // analyzePostingTimes.tsのキーワード版。返信検索キーワードごとの承認/却下実績から、
-// 次回以降の候補選定(generateReplyCandidate.tsのsortKeywordResultsByWeight)が
+// 次回以降の候補選定(generateReplyCandidate.tsのsortByWeight)が
 // 参照する「キーワードごとの優先度」を算出させる。
 export async function analyzeReplyKeywords(model: string, statsText: string): Promise<AnalyzeReplyKeywordsResult> {
   const prompt = [

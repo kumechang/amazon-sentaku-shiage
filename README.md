@@ -32,7 +32,8 @@ npm run generate        # 投稿候補を1件生成し、GitHub Issueを作成
 npm run handle-approval # GitHub Issueコメント(承認/却下)を処理(Actionsのissue_commentイベント経由で実行)
 npm run collect-metrics # 投稿済みツイートのエンゲージメントを取得
 npm run analyze-posting-times # エンゲージメント実績から時間帯ごとの投稿重みを算出
-npm run generate-reply  # 他アカウントの投稿への返信候補を1件探し、Issueで下書き提示
+npm run discover-replies # 他アカウントの投稿を検索し、返信候補プール(discovered_reply_targets)に貯める
+npm run generate-reply  # プールから返信候補を1件取り出し、Issueで下書き提示
 npm run handle-reply-approval # 返信Issueコメント(承認/却下)を処理
 npm test                # ユニットテスト
 npm run typecheck
@@ -43,7 +44,7 @@ npm run typecheck
 フォロワーがまだ少ないうちは、投稿するだけでは誰にも届かない。以下は業者に頼らず、1〜2週間で「本物の濃いフォロワー」と自然ないいねを増やすための手動ステップ。X側の操作(フォロー)はAPIでは行えないため人力での実施が前提だが、「投稿に気づく」部分はX通知ベルではなくGitHub Issueのメール通知に任せる運用にしている(下記3参照)。
 
 1. 自分の発信ジャンル(このアカウントなら洗濯・仕上げ剤・暮らし系)で、フォロワー1万人以上の「憧れのアカウント」を5〜10件選んでフォローする。
-2. 同じアカウントを`data/watched_accounts.json`に登録する(`active: true`)。登録しておくと、`generateReply`(後述)が投稿可能時間帯の間毎時それらのアカウントの新着投稿を検索し、フォロワー数レンジの制限なしで優先的にリプライ案を作ってGitHub Issueに提示する。
+2. 同じアカウントを`data/watched_accounts.json`に登録する(`active: true`)。登録しておくと、`discover-replies.yml`がそれらのアカウントの新着投稿を検索してプールに貯め、`generate-replies.yml`がフォロワー数レンジの制限なしで優先的にリプライ案を作ってGitHub Issueに提示する(詳細は後述の「他アカウントの投稿への返信」参照)。
 3. このリポジトリ(またはこのIssueが作られるリポジトリ)を「Watch」しておけば、Issueが作成されるたびにメール通知が届く。X側でベルマークをオンにする必要はない。
 4. 通知が来たら、できるだけ早く対象の投稿を開き、Issue上の下書きを参考にしつつ心のこもった(かつ有益な)リプライを手動で投稿する。2026年2月のX API仕様変更により自動投稿はできないため、最終的な投稿アクションは自分で行う。目安として1日3〜5回。
 
@@ -51,12 +52,19 @@ npm run typecheck
 
 フォロワー0の新規アカウントは単独投稿だけでは届く相手がいないため、キーワード検索・ウォッチ対象アカウント(`data/watched_accounts.json`)から返信候補を探し、Claudeが返信すべきか・何を返信するかを判断してGitHub Issueに提示する。
 
-**2026年2月のX API仕様変更により、メンション/引用されていない投稿へのプログラム経由の返信は全ティア(Free/Basic/Pro/Pay-Per-Use)でブロックされている**ため、Issueで「承認」してもX APIでの自動投稿は行わない。承認されたIssueに書かれたリンクから対象投稿を開き、返信案を手動でコピー&投稿する運用。`generate-replies.yml`のschedule起動は一時停止中(`workflow_dispatch`での手動実行は可能)。フォロワーが増え、こちらが先にメンション/引用される機会が増えてきたら、その条件下での自動返信を検討する。
+**2026年2月のX API仕様変更により、メンション/引用されていない投稿へのプログラム経由の返信は全ティア(Free/Basic/Pro/Pay-Per-Use)でブロックされている**ため、Issueで「承認」してもX APIでの自動投稿は行わない。承認されたIssueに書かれたリンクから対象投稿を開き、返信案を手動でコピー&投稿する運用。フォロワーが増え、こちらが先にメンション/引用される機会が増えてきたら、その条件下での自動返信を検討する。
+
+返信候補づくりは2段階に分かれている(検索はコスト・レート制限があるため、下書き作成の頻度と切り離している)。
+
+1. `discover-replies.yml`(3時間おき): キーワード・ウォッチ対象アカウントを検索し、見つかった投稿を`discovered_reply_targets`テーブルにプールとして貯めるだけ(Claude呼び出し・Issue作成はしない)。
+2. `generate-replies.yml`(投稿可能時間帯の間毎時、`shouldGenerateReplyNow`でスロットリング): 検索はせず、プールから未処理の候補を1件取り出し(ウォッチ対象アカウントを優先)、Claudeが返信すべきか判断してIssueを作成する。プールに溜まった候補が`replySettings.candidateExpiryHours`(既定48時間)より古くなった場合は、返信案を作らずに破棄する。
 
 ## GitHub Actions
 
 - `generate-posts.yml`: 投稿可能時間帯(`postingWindow`、既定JST 7〜23時)の間、毎時投稿候補の生成を試みる。実際に生成するかは`shouldGenerateNow`(1日の目標投稿数`targetPostsPerDay`・直近投稿からの間隔`minSpacingHours`・時間帯の重み)が判断するため、毎時起動してもClaude呼び出し(コスト)は目標水準に保たれる。`approvalMode: "auto"`かつセルフチェック合格時はその場で投稿。
 - `handle-approval.yml`: Issueコメントに「承認」/「却下」と書かれたら処理(`pending-approval`ラベルが付いたIssueのみ反応)。
+- `discover-replies.yml`: 3時間おきに、他アカウントの投稿への返信候補を検索して`discovered_reply_targets`プールに貯める(Claude呼び出し・Issue作成はしない)。
+- `generate-replies.yml`: 投稿可能時間帯の間毎時、プールから候補を1件取り出してClaudeに下書きを作らせIssueを作成する(検索はしない)。
 - `collect-metrics.yml`: 毎日、投稿済みツイートのエンゲージメントを取得し`post_metrics`に記録。
 - `analyze-posting-times.yml`: 週1回、`post_metrics`を時間帯別に集計しClaudeに分析させ、`posting_time_weights`(反応の良い時間帯ほど高い重み)を更新する。データが少ない(投稿済み10件未満)うちは分析をスキップし、重みは既定の均等のまま。
 

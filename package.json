@@ -6,6 +6,7 @@
   "scripts": {
     "generate": "tsx src/cli/generate.ts",
     "handle-approval": "tsx src/cli/handleApproval.ts",
+    "discover-replies": "tsx src/cli/discoverReplyCandidates.ts",
     "generate-reply": "tsx src/cli/generateReply.ts",
     "handle-reply-approval": "tsx src/cli/handleReplyApproval.ts",
     "handle-mentions": "tsx src/cli/handleMentions.ts",

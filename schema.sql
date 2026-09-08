@@ -117,3 +117,18 @@ CREATE TABLE IF NOT EXISTS reply_keyword_weights (
   reason TEXT,
   updated_at TEXT
 );
+
+-- 検索(X API、有料/レート制限あり)と返信案作成(Claude呼び出し)を分離するためのプール。
+-- discoverReplyCandidates(discover-replies.yml、低頻度)が検索結果をここに貯め、
+-- generateReplyCandidate(generate-replies.yml、毎時)は検索をせずここから1件取り出すだけにする。
+CREATE TABLE IF NOT EXISTS discovered_reply_targets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source TEXT NOT NULL,              -- 'keyword' | 'watched_account'
+  matched_keyword TEXT,              -- source='keyword'の場合のみ
+  tweet_id TEXT NOT NULL UNIQUE,     -- 同じ投稿を重複して貯めない
+  author_username TEXT NOT NULL,
+  text TEXT NOT NULL,
+  follower_count INTEGER,
+  discovered_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE INDEX IF NOT EXISTS idx_discovered_reply_targets_source ON discovered_reply_targets(source);
