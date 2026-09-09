@@ -20,6 +20,9 @@ export function getDb(): Database.Database {
   // CREATE TABLE IF NOT EXISTSは既存テーブルへの列追加はしないため、
   // 既にテーブルが存在するDBに対してはここでガード付きALTERする。
   ensureColumn(db, "reply_candidates", "matched_keyword", "TEXT");
+  ensureColumn(db, "reply_candidates", "selfcheck_json", "TEXT");
+  ensureColumn(db, "reply_candidates", "self_check_score", "INTEGER");
+  ensureColumn(db, "reply_candidates", "self_check_pass", "INTEGER");
   ensureColumn(db, "posts", "reply_kind", "TEXT");
   ensureColumn(db, "posts", "tip_text", "TEXT");
   ensureColumn(db, "posts", "tip_poll_options", "TEXT");

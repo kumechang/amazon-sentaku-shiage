@@ -1,6 +1,7 @@
 import { getOctokit } from "./octokit.js";
 import { env, parseGithubRepository } from "../lib/env.js";
 import { logger } from "../lib/logger.js";
+import type { ReplySelfCheckResult } from "../claude/stages/replySelfCheckStage.js";
 
 // createApprovalIssue.tsの投稿承認用Issueと混同しないよう別ラベルにする
 // (handle-approval.ymlとhandle-reply-approval.ymlの反応先を分けるためのガード)。
@@ -10,8 +11,12 @@ export interface ReplyApprovalIssueContent {
   targetAuthorUsername: string;
   targetTweetId: string;
   targetText: string;
+  // レビュー(返信セルフチェック)後の最終案。selfCheckが不合格だった場合は、レビュー時に
+  // その場で1回だけ書き直された版が入る。
   replyText: string;
   reason: string;
+  // 返信セルフチェックの結果。レビューを行わなかった場合(呼び出し側の都合等)はnull。
+  selfCheck: ReplySelfCheckResult | null;
 }
 
 export interface CreatedIssue {
@@ -37,6 +42,18 @@ export function buildReplyIssueTitle(content: ReplyApprovalIssueContent): string
 // この返信案をコピーし、対象投稿へ手動でXアプリから返信する運用。
 export function buildReplyIssueBody(content: ReplyApprovalIssueContent): string {
   const targetUrl = `https://x.com/${content.targetAuthorUsername}/status/${content.targetTweetId}`;
+  const { selfCheck } = content;
+  const selfCheckSection = selfCheck
+    ? [
+        "",
+        `## セルフチェック: ${selfCheck.score}点 (${selfCheck.pass ? "合格" : "不合格 → 自動修正済み"})`,
+        "指摘事項",
+        selfCheck.problems.length > 0 ? selfCheck.problems.map((p) => `- ${p}`).join("\n") : "(なし)",
+        "改善点",
+        selfCheck.improvements.length > 0 ? selfCheck.improvements.map((i) => `- ${i}`).join("\n") : "(なし)",
+      ]
+    : [];
+
   return [
     "## 返信対象",
     `@${content.targetAuthorUsername}: ${content.targetText}`,
@@ -46,6 +63,7 @@ export function buildReplyIssueBody(content: ReplyApprovalIssueContent): string 
     "```",
     content.replyText,
     "```",
+    ...selfCheckSection,
     "",
     "## 判断理由",
     content.reason,

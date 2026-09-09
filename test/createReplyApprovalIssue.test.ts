@@ -8,6 +8,7 @@ function baseContent(overrides: Partial<Parameters<typeof buildReplyIssueTitle>[
     targetText: "今日は部屋干しで生乾き臭がひどい",
     replyText: "わかる、この時期ほんとそう",
     reason: "共感できる悩み投稿だったため",
+    selfCheck: null,
     ...overrides,
   };
 }
@@ -33,5 +34,27 @@ describe("buildReplyIssueBody", () => {
     const longText = "これはとても長い投稿本文です。".repeat(5);
     const body = buildReplyIssueBody(baseContent({ targetText: longText }));
     expect(body).toContain(longText);
+  });
+
+  it("omits the self-check section when selfCheck is null", () => {
+    const body = buildReplyIssueBody(baseContent());
+    expect(body).not.toContain("セルフチェック");
+  });
+
+  it("shows the review score/problems/improvements when selfCheck is present", () => {
+    const body = buildReplyIssueBody(
+      baseContent({
+        selfCheck: {
+          score: 65,
+          pass: false,
+          problems: ["やや上から目線"],
+          improvements: ["語尾を柔らかくする"],
+          final_reply: "わかる、この時期ほんとつらいよね",
+        },
+      })
+    );
+    expect(body).toContain("セルフチェック: 65点 (不合格 → 自動修正済み)");
+    expect(body).toContain("やや上から目線");
+    expect(body).toContain("語尾を柔らかくする");
   });
 });
