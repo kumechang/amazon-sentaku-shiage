@@ -3,6 +3,7 @@ import type { AppConfig } from "../config/types.js";
 import { loadAccountInfo } from "../context/accountInfo.js";
 import { summarizeRecentPosts } from "../context/recentPostsSummarizer.js";
 import { runReplyStage } from "../claude/stages/replyStage.js";
+import { runReplySelfCheckStage, type ReplySelfCheckResult } from "../claude/stages/replySelfCheckStage.js";
 import { createReplyCandidate, setGithubIssue } from "../db/repositories/replyCandidatesRepo.js";
 import { getWeight, getAverageWeight } from "../db/repositories/replyKeywordWeightsRepo.js";
 import {
@@ -93,6 +94,23 @@ export async function generateReplyCandidate(db: Database.Database, config: AppC
     rejectionFeedback,
   });
 
+  // 返信すべき場合のみ、レビュー(返信セルフチェック)にかける。ここで不合格になった場合、
+  // 応答に含まれる修正版(final_reply)をそのまま採用する(レビュー→書き直し→再レビュー、
+  // というループはしない。セルフチェック.md/投稿生成と同じ「1回だけ書き直し」のパターン)。
+  let finalReplyText = replyResult.data.reply_text;
+  let selfCheck: ReplySelfCheckResult | null = null;
+  if (replyResult.data.should_reply) {
+    const selfCheckResult = await runReplySelfCheckStage(config.claudeModel, {
+      accountInfo,
+      targetAuthor: picked.author_username,
+      targetText: picked.text,
+      replyText: replyResult.data.reply_text,
+      passThreshold: config.selfCheckPassThreshold,
+    });
+    selfCheck = selfCheckResult.data;
+    finalReplyText = selfCheckResult.data.final_reply;
+  }
+
   const replyId = createReplyCandidate(db, {
     source: picked.source,
     matched_keyword: picked.matched_keyword,
@@ -100,9 +118,12 @@ export async function generateReplyCandidate(db: Database.Database, config: AppC
     target_author_username: picked.author_username,
     target_text: picked.text,
     target_follower_count: picked.follower_count,
-    reply_text: replyResult.data.should_reply ? replyResult.data.reply_text : null,
+    reply_text: replyResult.data.should_reply ? finalReplyText : null,
     should_reply: replyResult.data.should_reply,
     skip_reason: replyResult.data.should_reply ? null : replyResult.data.reason,
+    selfcheck_json: selfCheck ? JSON.stringify(selfCheck) : null,
+    self_check_score: selfCheck?.score ?? null,
+    self_check_pass: selfCheck?.pass ?? null,
     run_id: env.githubRunId || null,
   });
 
@@ -118,14 +139,15 @@ export async function generateReplyCandidate(db: Database.Database, config: AppC
     targetAuthorUsername: picked.author_username,
     targetTweetId: picked.tweet_id,
     targetText: picked.text,
-    replyText: replyResult.data.reply_text,
+    replyText: finalReplyText,
     reason: replyResult.data.reason,
+    selfCheck,
   });
   if (issue.number > 0) {
     setGithubIssue(db, replyId, issue.number, issue.url);
   }
 
-  logger.info("reply candidate created", { replyId, issueNumber: issue.number });
+  logger.info("reply candidate created", { replyId, issueNumber: issue.number, score: selfCheck?.score });
 
   // 2026年2月のX API仕様変更で、メンション/引用されていない投稿への自動返信はできなくなった
   // ため、approvalModeが"auto"でもここでは投稿しない(手動投稿の下書き支援に留める)。

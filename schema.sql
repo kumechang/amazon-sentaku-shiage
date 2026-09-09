@@ -89,9 +89,12 @@ CREATE TABLE IF NOT EXISTS reply_candidates (
   target_author_username TEXT NOT NULL,
   target_text TEXT NOT NULL,
   target_follower_count INTEGER,
-  reply_text TEXT,                   -- should_reply=falseならNULL
+  reply_text TEXT,                   -- should_reply=falseならNULL。セルフチェック後の最終案
   should_reply INTEGER NOT NULL,     -- Claudeの判断(0/1)
   skip_reason TEXT,                  -- should_reply=falseの理由
+  selfcheck_json TEXT,               -- 返信セルフチェックステージの生JSON(should_reply=falseならNULL)
+  self_check_score INTEGER,          -- selfcheck_json.score のコピー
+  self_check_pass INTEGER,           -- selfcheck_json.pass のコピー(0/1)
   status TEXT NOT NULL DEFAULT 'pending_approval',
     -- pending_approval | approved | rejected | posted | posted_dryrun | post_failed | skipped
   github_issue_number INTEGER UNIQUE,

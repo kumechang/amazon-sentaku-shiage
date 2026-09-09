@@ -3,6 +3,7 @@ import type { AppConfig } from "../config/types.js";
 import { loadAccountInfo } from "../context/accountInfo.js";
 import { summarizeRecentPosts } from "../context/recentPostsSummarizer.js";
 import { runReplyStage } from "../claude/stages/replyStage.js";
+import { runReplySelfCheckStage, type ReplySelfCheckResult } from "../claude/stages/replySelfCheckStage.js";
 import { getXClient } from "../x/xClient.js";
 import { fetchMentions } from "../x/fetchMentions.js";
 import {
@@ -72,6 +73,23 @@ export async function generateMentionReplies(db: Database.Database, config: AppC
       rejectionFeedback,
     });
 
+    // 返信すべき場合のみレビュー(返信セルフチェック)にかける。ここは自動投稿が許可されている
+    // 唯一の経路(approvalMode: "auto")のため、レビュー未実施のままpostされないよう
+    // generateReplyCandidate.tsと同じ「1回だけ書き直し」のパターンをここでも通す。
+    let finalReplyText = replyResult.data.reply_text;
+    let selfCheck: ReplySelfCheckResult | null = null;
+    if (replyResult.data.should_reply) {
+      const selfCheckResult = await runReplySelfCheckStage(config.claudeModel, {
+        accountInfo,
+        targetAuthor: mention.authorUsername,
+        targetText: mention.text,
+        replyText: replyResult.data.reply_text,
+        passThreshold: config.selfCheckPassThreshold,
+      });
+      selfCheck = selfCheckResult.data;
+      finalReplyText = selfCheckResult.data.final_reply;
+    }
+
     const replyId = createReplyCandidate(db, {
       source: "mention",
       matched_keyword: null,
@@ -79,9 +97,12 @@ export async function generateMentionReplies(db: Database.Database, config: AppC
       target_author_username: mention.authorUsername,
       target_text: mention.text,
       target_follower_count: mention.followerCount,
-      reply_text: replyResult.data.should_reply ? replyResult.data.reply_text : null,
+      reply_text: replyResult.data.should_reply ? finalReplyText : null,
       should_reply: replyResult.data.should_reply,
       skip_reason: replyResult.data.should_reply ? null : replyResult.data.reason,
+      selfcheck_json: selfCheck ? JSON.stringify(selfCheck) : null,
+      self_check_score: selfCheck?.score ?? null,
+      self_check_pass: selfCheck?.pass ?? null,
       run_id: env.githubRunId || null,
     });
     processedIds.push(replyId);
@@ -96,14 +117,15 @@ export async function generateMentionReplies(db: Database.Database, config: AppC
       targetAuthorUsername: mention.authorUsername,
       targetTweetId: mention.tweetId,
       targetText: mention.text,
-      replyText: replyResult.data.reply_text,
+      replyText: finalReplyText,
       reason: replyResult.data.reason,
+      selfCheck,
     });
     if (issue.number > 0) {
       setGithubIssue(db, replyId, issue.number, issue.url);
     }
 
-    logger.info("mention reply candidate created", { replyId, issueNumber: issue.number });
+    logger.info("mention reply candidate created", { replyId, issueNumber: issue.number, score: selfCheck?.score });
 
     if (config.approvalMode === "auto") {
       const reply = getById(db, replyId);

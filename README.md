@@ -59,6 +59,8 @@ npm run typecheck
 1. `discover-replies.yml`(3時間おき): キーワード・ウォッチ対象アカウントを検索し、見つかった投稿を`discovered_reply_targets`テーブルにプールとして貯めるだけ(Claude呼び出し・Issue作成はしない)。
 2. `generate-replies.yml`(投稿可能時間帯の間毎時、`shouldGenerateReplyNow`でスロットリング): 検索はせず、プールから未処理の候補を1件取り出し(ウォッチ対象アカウントを優先)、Claudeが返信すべきか判断してIssueを作成する。プールに溜まった候補が`replySettings.candidateExpiryHours`(既定48時間)より古くなった場合は、返信案を作らずに破棄する。
 
+返信すべきと判断した案は、投稿本体の生成→セルフチェックと同じパターンで、`返信セルフチェック.md`によるレビューにかけられる(`selfCheckPassThreshold`未満なら、レビュー応答内でその場で1回だけ書き直す。レビュー→書き直し→再レビューのループはしない)。レビュー結果(スコア・指摘事項・改善点)はIssue本文にも表示される。自分への@メンション返信(`generateMentionReplies`、`approvalMode: "auto"`で自動投稿される唯一の経路)でも同じレビューを通す。
+
 ## GitHub Actions
 
 - `generate-posts.yml`: 投稿可能時間帯(`postingWindow`、既定JST 7〜23時)の間、毎時投稿候補の生成を試みる。実際に生成するかは`shouldGenerateNow`(1日の目標投稿数`targetPostsPerDay`・直近投稿からの間隔`minSpacingHours`・時間帯の重み)が判断するため、毎時起動してもClaude呼び出し(コスト)は目標水準に保たれる。`approvalMode: "auto"`かつセルフチェック合格時はその場で投稿。

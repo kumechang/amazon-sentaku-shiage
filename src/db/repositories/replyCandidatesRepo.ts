@@ -28,6 +28,11 @@ export interface CreateReplyCandidateInput {
   should_reply: boolean;
   skip_reason: string | null;
   run_id: string | null;
+  // 返信セルフチェックステージの結果。should_reply=falseの場合はレビュー自体を行わないため
+  // 省略可(未指定ならNULLとして保存される)。
+  selfcheck_json?: string | null;
+  self_check_score?: number | null;
+  self_check_pass?: boolean | null;
 }
 
 export interface ReplyCandidateRow {
@@ -41,6 +46,9 @@ export interface ReplyCandidateRow {
   reply_text: string | null;
   should_reply: number;
   skip_reason: string | null;
+  selfcheck_json: string | null;
+  self_check_score: number | null;
+  self_check_pass: number | null;
   status: ReplyCandidateStatus;
   github_issue_number: number | null;
   github_issue_url: string | null;
@@ -62,8 +70,8 @@ export function createReplyCandidate(db: Database.Database, input: CreateReplyCa
   const status: ReplyCandidateStatus = input.should_reply ? "pending_approval" : "skipped";
   const result = db
     .prepare(
-      `INSERT INTO reply_candidates (source, matched_keyword, target_tweet_id, target_author_username, target_text, target_follower_count, reply_text, should_reply, skip_reason, status, run_id, updated_at)
-       VALUES (@source, @matched_keyword, @target_tweet_id, @target_author_username, @target_text, @target_follower_count, @reply_text, @should_reply, @skip_reason, @status, @run_id, CURRENT_TIMESTAMP)`
+      `INSERT INTO reply_candidates (source, matched_keyword, target_tweet_id, target_author_username, target_text, target_follower_count, reply_text, should_reply, skip_reason, selfcheck_json, self_check_score, self_check_pass, status, run_id, updated_at)
+       VALUES (@source, @matched_keyword, @target_tweet_id, @target_author_username, @target_text, @target_follower_count, @reply_text, @should_reply, @skip_reason, @selfcheck_json, @self_check_score, @self_check_pass, @status, @run_id, CURRENT_TIMESTAMP)`
     )
     .run({
       source: input.source,
@@ -75,6 +83,9 @@ export function createReplyCandidate(db: Database.Database, input: CreateReplyCa
       reply_text: input.reply_text,
       should_reply: input.should_reply ? 1 : 0,
       skip_reason: input.skip_reason,
+      selfcheck_json: input.selfcheck_json ?? null,
+      self_check_score: input.self_check_score ?? null,
+      self_check_pass: input.self_check_pass === undefined || input.self_check_pass === null ? null : input.self_check_pass ? 1 : 0,
       status,
       run_id: input.run_id,
     });
