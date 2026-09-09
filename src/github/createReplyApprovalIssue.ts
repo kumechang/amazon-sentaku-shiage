@@ -19,6 +19,19 @@ export interface CreatedIssue {
   url: string;
 }
 
+// 投稿本文を1行・短く整形する。改行・連続空白を1つのスペースにまとめる。
+function truncateForTitle(text: string, maxLength: number): string {
+  const singleLine = text.replace(/\s+/g, " ").trim();
+  if (singleLine.length <= maxLength) return singleLine;
+  return `${singleLine.slice(0, maxLength)}…`;
+}
+
+// 通知(プッシュ通知やメールの件名)がタイトルしか表示しない場合でも、@ユーザー名だけでなく
+// 投稿内容の見当がつくようにする(本文には全文を載せているが、以前はタイトルに載っていなかった)。
+export function buildReplyIssueTitle(content: ReplyApprovalIssueContent): string {
+  return `返信承認: @${content.targetAuthorUsername} 「${truncateForTitle(content.targetText, 30)}」`;
+}
+
 // 2026年2月のX API仕様変更で、メンション/引用されていない投稿へのプログラム経由の返信が
 // ブロックされたため、「承認」しても自動投稿はしない(手動投稿の下書き支援に留める)。
 // この返信案をコピーし、対象投稿へ手動でXアプリから返信する運用。
@@ -51,7 +64,7 @@ export async function createReplyApprovalIssue(content: ReplyApprovalIssueConten
     return { number: -1, url: "" };
   }
 
-  const title = `返信承認: @${content.targetAuthorUsername}宛て`;
+  const title = buildReplyIssueTitle(content);
   const body = buildReplyIssueBody(content);
 
   const { data } = await getOctokit().issues.create({
