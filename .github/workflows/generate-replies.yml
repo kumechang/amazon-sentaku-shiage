@@ -25,6 +25,8 @@ permissions:
 
 jobs:
   generate-reply:
+    # 【一時停止中 2026-09-10】botを一時停止しています。再開する場合はこの行を削除してください。
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

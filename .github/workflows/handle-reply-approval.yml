@@ -17,7 +17,10 @@ permissions:
 jobs:
   handle-reply-approval:
     runs-on: ubuntu-latest
+    # 【一時停止中 2026-09-10】先頭の `false &&` でbotを一時停止しています。
+    # 再開する場合は `false &&` の行を削除してください(元の条件はそのまま残しています)。
     if: >
+      false &&
       contains(github.event.issue.labels.*.name, 'pending-reply-approval') &&
       (contains(github.event.comment.body, '承認') || contains(github.event.comment.body, '却下'))
     steps:
