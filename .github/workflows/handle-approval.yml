@@ -18,7 +18,10 @@ jobs:
     runs-on: ubuntu-latest
     # pending-approvalラベルが無いIssueや、承認/却下と無関係なコメントには反応しない
     # (Issueスレッド内の雑談コメントで無駄に実行されないためのガード)。
+    # 【一時停止中 2026-09-10】先頭の `false &&` でbotを一時停止しています。
+    # 再開する場合は `false &&` の行を削除してください(元の条件はそのまま残しています)。
     if: >
+      false &&
       contains(github.event.issue.labels.*.name, 'pending-approval') &&
       (contains(github.event.comment.body, '承認') || contains(github.event.comment.body, '却下'))
     steps:

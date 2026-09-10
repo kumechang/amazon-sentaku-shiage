@@ -1,5 +1,10 @@
 # amazon-sentaku-shiage
 
+> **⏸️ 全bot一時停止中(2026-09-10〜)**
+> このアカウントでの運用がうまくいっていないため、`.github/workflows/`内の全botワークフロー(9件。`ci.yml`を除く)を各ジョブの`if: false`で一時停止しています。GitHub Actionsのネイティブ`schedule`だけでなく、`workflow_dispatch`経由の外部リクエスト(cron-job.org等)にも反応しません。
+>
+> **再開方法**: 各ワークフローファイルに入っている`【一時停止中 2026-09-10】`コメントを目印に、`if: false`(承認系2件は`false &&`の行)を削除するだけで元の挙動に戻ります。cronスケジュール自体は変更していないため、他の設定を戻す必要はありません。
+
 洗濯・仕上げ剤ジャンルのAmazonアフィリエイトを絡めたX自動投稿システム。
 
 Claudeによる3段階パイプライン(戦略決定 → 投稿生成 → セルフチェック)で投稿候補を作成し、GitHub Issueでの人による承認を経てXに投稿する。承認モードは`config/app.json`の`approvalMode`で`"manual"` / `"auto"`を切り替え可能。
